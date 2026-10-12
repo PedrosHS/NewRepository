@@ -1,4 +1,4 @@
--- AdoptMe Private Local 1.1 | reviewed from the attached private build.
+-- AdoptMe Private Local 1.2 | native HUB and needs stability revision.
 -- This check is editable client code, not encryption or copy protection.
 -- Set your public numeric Roblox UserId below, or provide it explicitly in loader.lua.
 local PRIVATE_OWNER_USER_ID = 175617267
@@ -1275,7 +1275,7 @@ __moduleSources["Services/Disclosure"] = function(...)
     local import = ...
     local Config = import("Core/Config")
     local Disclosure = {}
-    Disclosure.VERSION = "Private Local 1.1 (attached base 2.1.6)"
+    Disclosure.VERSION = "Private Local 1.2 (attached base 2.1.6)"
     function Disclosure.isAllowedField(field) return false end
     function Disclosure.featureSummary(config)
         local on, total = Config.countFeatures(config)
@@ -1289,7 +1289,7 @@ __moduleSources["Services/Disclosure"] = function(...)
     end
     function Disclosure.buildStartLines(config, files, webhook, telemetry, launch)
         return {
-            "AdoptMe Private Local 1.1 | source from attached Adopt Victims base 2.1.6",
+            "AdoptMe Private Local 1.2 | source from attached Adopt Victims base 2.1.6",
             "External HTTP: disabled (no request function, no game:HttpGet, no loadstring)",
             "External UI library: removed; Roblox-native local interface",
             "Remote notifications/telemetry/squad relay: disabled",
@@ -2084,320 +2084,553 @@ __moduleSources["Services/Lang"] = function(...)
     end
     return Lang
 end
-__moduleSources["Services/Interface"] = function(...)
-    -- UI built using Roblox instances only. No third-party downloads or web requests.
-    local Interface = {}
-    Interface.SAVE_PATH = "(settings are not written to disk)"
-    Interface.CONFIG_FOLDER = "(disabled)"
-    Interface.CONFIG_EXTENSION = ""
-    Interface.current = nil
-    function Interface.applySaved(config, logger)
-        -- Prevent old local files, including webhook URLs, from changing the private build.
-        return 0
+__moduleSources["Services/WindowState"] = function(...)
+    -- Pure geometry logic: no services or input connections.
+    local WindowState = {}
+    WindowState.__index = WindowState
+    local MARGIN, HEADER = 12, 52
+    local function finite(value, fallback)
+        return type(value) == "number" and value == value and math.abs(value) < math.huge and value or fallback
     end
-
-    function Interface.start(api, options)
-        assert(type(api) == "table" and type(api.Config) == "table", "Private UI: control API unavailable")
-        if Interface.current then
-            Interface.current.Close()
+    local function clamp(value, low, high)
+        return math.max(low, math.min(high, value))
+    end
+    function WindowState.new(width, height)
+        local self = setmetatable({ minimized = false, maximized = false }, WindowState)
+        self.vw, self.vh = math.max(120, finite(width, 1024)), math.max(100, finite(height, 768))
+        self.w, self.h = math.min(760, self.vw - MARGIN * 2), math.min(530, self.vh - MARGIN * 2)
+        self.x, self.y = (self.vw - self.w) / 2, (self.vh - self.h) / 2
+        self:constrain()
+        return self
+    end
+    function WindowState:constrain()
+        local maxW, maxH = self.vw - MARGIN * 2, self.vh - MARGIN * 2
+        self.w = clamp(finite(self.w, 760), math.min(420, maxW), maxW)
+        self.h = clamp(finite(self.h, 530), math.min(300, maxH), maxH)
+        self.x = clamp(finite(self.x, MARGIN), MARGIN, self.vw - self.w - MARGIN)
+        self.y = clamp(finite(self.y, MARGIN), MARGIN, self.vh - (self.minimized and HEADER or self.h) - MARGIN)
+    end
+    function WindowState:rect()
+        return self.x, self.y, self.w, self.minimized and HEADER or self.h
+    end
+    function WindowState:moveTo(x, y)
+        if self.maximized then return end
+        self.x, self.y = finite(x, self.x), finite(y, self.y)
+        self:constrain()
+    end
+    function WindowState:resizeTo(w, h)
+        if self.maximized then return end
+        self.minimized = false
+        self.w, self.h = finite(w, self.w), finite(h, self.h)
+        self:constrain()
+    end
+    function WindowState:toggleMinimize()
+        self.minimized = not self.minimized
+        self:constrain()
+    end
+    function WindowState:toggleMaximize()
+        self.minimized = false
+        if self.maximized then
+            self.x, self.y, self.w, self.h = self.restore[1], self.restore[2], self.restore[3], self.restore[4]
+            self.restore = nil
+            self.maximized = false
+        else
+            self.restore = { self.x, self.y, self.w, self.h }
+            self.maximized = true
+            self.x, self.y = MARGIN, MARGIN
+            self.w, self.h = self.vw - MARGIN * 2, self.vh - MARGIN * 2
         end
-        local Players = game:GetService("Players")
+        self:constrain()
+    end
+    function WindowState:setViewport(width, height)
+        self.vw, self.vh = math.max(120, finite(width, self.vw)), math.max(100, finite(height, self.vh))
+        if self.maximized then
+            self.x, self.y, self.w, self.h = MARGIN, MARGIN, self.vw - MARGIN * 2, self.vh - MARGIN * 2
+        end
+        self:constrain()
+    end
+    return WindowState
+end
+
+__moduleSources["Services/Interface"] = function(...)
+    local import = ...
+    local WindowState = import("Services/WindowState")
+    local Interface = { SAVE_PATH = "(disabled)", CONFIG_FOLDER = "(disabled)", CONFIG_EXTENSION = "", current = nil }
+    function Interface.applySaved() return 0 end
+    local NEEDS = {
+        pet_me = "Carinho", hungry = "Fome", thirsty = "Sede", sleepy = "Sono", dirty = "Banho",
+        toilet = "Banheiro", sick = "Doente", play = "Brincar", mystery = "Mistério", salon = "Salão",
+        school = "Escola", pizza_party = "Pizza", camping = "Acampamento", beach_party = "Praia",
+        walk = "Passear", ride = "Passeio montado", cat_cafe = "Cat Café", bored = "Tédio",
+    }
+    local C = {
+        bg = Color3.fromRGB(14, 15, 23), rail = Color3.fromRGB(19, 21, 31), card = Color3.fromRGB(24, 27, 39),
+        border = Color3.fromRGB(43, 47, 65), accent = Color3.fromRGB(151, 119, 255), tint = Color3.fromRGB(46, 36, 75),
+        text = Color3.fromRGB(237, 238, 247), muted = Color3.fromRGB(145, 153, 174),
+        green = Color3.fromRGB(66, 204, 154), red = Color3.fromRGB(236, 103, 123),
+    }
+    local function build(api, scope)
         local UIS = game:GetService("UserInputService")
-        local player = Players.LocalPlayer
+        local player = game:GetService("Players").LocalPlayer
         local parent = player and player:WaitForChild("PlayerGui", 10)
-        assert(parent, "PlayerGui not ready")
-        assert(not api.Status().stopped, "Script stopped while waiting for PlayerGui")
+        assert(parent, "PlayerGui não está pronto")
+        assert(not api.Status().stopped, "O script foi encerrado")
         local gui = Instance.new("ScreenGui")
-        gui.Name = "AdoptMePrivateLocalUI"
+        scope.gui = gui
+        gui.Name = "AdoptMePrivateHub12"
         gui.ResetOnSpawn = false
         gui.IgnoreGuiInset = true
+        gui.DisplayOrder = 50
         gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         gui.Parent = parent
-
-        local layoutOrder = 0
-        local function element(kind, properties, parentElement)
+        local camera = workspace.CurrentCamera
+        local view = camera and camera.ViewportSize or Vector2.new(1024, 768)
+        local geometry = WindowState.new(view.X, view.Y)
+        local handle = { Owner = api, Geometry = geometry }
+        local closed, refreshers, rows, pages, navButtons = false, {}, {}, {}, {}
+        local order, selected, messageUntil = 0, "Inicio", 0
+        local function connect(signal, callback)
+            local connection = signal:Connect(callback)
+            table.insert(scope.connections, connection)
+            return connection
+        end
+        local function el(kind, props, node)
             local obj = Instance.new(kind)
-            for key, value in pairs(properties or {}) do
-                obj[key] = value
+            for key, value in pairs(props or {}) do obj[key] = value end
+            if obj:IsA("GuiObject") then
+                order = order + 1
+                obj.LayoutOrder = order
+                obj.BorderSizePixel = 0
             end
-            if kind == "TextLabel" or kind == "TextButton" or kind == "TextBox" then
-                layoutOrder += 1
-                obj.LayoutOrder = layoutOrder
+            if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                obj.Font = Enum.Font.Gotham
+                obj.TextColor3 = obj.TextColor3 == Color3.new(0, 0, 0) and C.text or obj.TextColor3
             end
-            obj.Parent = parentElement
+            obj.Parent = node
             return obj
         end
-        local COLOR = {
-            bg = Color3.fromRGB(19, 24, 36),
-            panel = Color3.fromRGB(29, 35, 51),
-            button = Color3.fromRGB(45, 56, 76),
-            primary = Color3.fromRGB(64, 123, 221),
-            red = Color3.fromRGB(169, 66, 74),
-            green = Color3.fromRGB(48, 133, 104),
-            text = Color3.fromRGB(239, 243, 250),
-            muted = Color3.fromRGB(175, 189, 207),
-        }
-        local panel = element("Frame", {
-            Name = "Window", AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.new(0.9, 0, 0.82, 0),
-            BackgroundColor3 = COLOR.bg, BorderSizePixel = 0,
-        }, gui)
-        element("UISizeConstraint", { MaxSize = Vector2.new(530, 640), MinSize = Vector2.new(280, 300) }, panel)
-        element("UICorner", { CornerRadius = UDim.new(0, 12) }, panel)
-        element("UIStroke", { Color = COLOR.primary, Thickness = 1 }, panel)
-
-        element("TextLabel", {
-            Size = UDim2.new(1, -90, 0, 48), Position = UDim2.new(0, 16, 0, 5),
-            BackgroundTransparency = 1, Text = "Adopt Me | Local 1.1", Font = Enum.Font.GothamBold,
-            TextSize = 19, TextColor3 = COLOR.text, TextXAlignment = Enum.TextXAlignment.Left,
-        }, panel)
-        local minimize = element("TextButton", {
-            Size = UDim2.fromOffset(36, 32), Position = UDim2.new(1, -45, 0, 12),
-            BackgroundColor3 = COLOR.button, Text = "_", Font = Enum.Font.GothamBold,
-            TextSize = 19, TextColor3 = COLOR.text,
-        }, panel)
-        element("UICorner", { CornerRadius = UDim.new(0, 8) }, minimize)
-
-        local status = element("TextLabel", {
-            Size = UDim2.new(1, -26, 0, 55), Position = UDim2.new(0, 13, 0, 53),
-            BackgroundColor3 = COLOR.panel, TextColor3 = COLOR.muted, Font = Enum.Font.Gotham,
-            TextSize = 12, TextWrapped = true, Text = "Preparando...",
-        }, panel)
-        element("UICorner", { CornerRadius = UDim.new(0, 8) }, status)
-        local statusMessageUntil = 0
-        local function showMessage(text)
-            status.Text = tostring(text)
-            statusMessageUntil = os.clock() + 6
+        local function round(obj, radius) el("UICorner", { CornerRadius = UDim.new(0, radius or 9) }, obj) end
+        local function text(value, size, pos, parentNode, color)
+            return el("TextLabel", { Text = value, TextSize = 13, TextWrapped = true, BackgroundTransparency = 1,
+                TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = color or C.text, Size = size, Position = pos }, parentNode)
         end
-
-        local scroll = element("ScrollingFrame", {
-            Name = "Settings", Position = UDim2.new(0, 13, 0, 115),
-            Size = UDim2.new(1, -26, 1, -128),
-            BackgroundTransparency = 1, BorderSizePixel = 0,
-            ScrollBarThickness = 5, ScrollBarImageColor3 = COLOR.primary,
-            CanvasSize = UDim2.fromOffset(0, 0), AutomaticCanvasSize = Enum.AutomaticSize.Y,
-            ScrollingDirection = Enum.ScrollingDirection.Y,
-        }, panel)
-        local layout = element("UIListLayout", {
-            FillDirection = Enum.FillDirection.Vertical, Padding = UDim.new(0, 7),
-            SortOrder = Enum.SortOrder.LayoutOrder,
-        }, scroll)
-        element("UIPadding", { PaddingBottom = UDim.new(0, 10) }, scroll)
-        local redraw = {}
-        local function label(text, strong)
-            return element("TextLabel", {
-                Size = UDim2.new(1, -7, 0, strong and 30 or 38),
-                BackgroundTransparency = 1, Text = text, TextColor3 = strong and COLOR.text or COLOR.muted,
-                TextWrapped = true, Font = strong and Enum.Font.GothamBold or Enum.Font.Gotham,
-                TextSize = strong and 15 or 12, TextXAlignment = Enum.TextXAlignment.Left,
-            }, scroll)
+        local function setText(obj, value)
+            value = tostring(value)
+            if obj.Text ~= value then obj.Text = value end
         end
-        local function button(labelText, onClick, color)
-            local btn = element("TextButton", {
-                Size = UDim2.new(1, -7, 0, 38), Text = labelText,
-                TextColor3 = COLOR.text, TextSize = 13, Font = Enum.Font.GothamSemibold,
-                BackgroundColor3 = color or COLOR.button, BorderSizePixel = 0,
-            }, scroll)
-            element("UICorner", { CornerRadius = UDim.new(0, 7) }, btn)
-            btn.Activated:Connect(function()
-                local ok, err = pcall(onClick)
-                if not ok then
-                    showMessage("Erro: " .. tostring(err))
-                end
-                if gui.Parent then
-                    for _, refresh in ipairs(redraw) do refresh() end
-                end
-            end)
-            return btn
+        local panel = el("Frame", { Name = "Window", Active = true, ClipsDescendants = true, BackgroundColor3 = C.bg }, gui)
+        round(panel, 12)
+        el("UIStroke", { Color = C.border, Thickness = 1 }, panel)
+        local header = el("Frame", { Name = "Header", Active = true, BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 52) }, panel)
+        local dragArea = el("TextButton", { Name = "DragArea", Active = true, AutoButtonColor = false,
+            Text = "", BackgroundTransparency = 1, Size = UDim2.new(1, -128, 1, 0) }, header)
+        local brand = text("A  /  ADOPT HUB", UDim2.new(1, -24, 1, 0), UDim2.fromOffset(18, 0), dragArea)
+        brand.Font = Enum.Font.GothamBold
+        brand.TextSize = 15
+        brand.ZIndex = 2
+        local function headerButton(name, caption, offset, color)
+            local button = el("TextButton", { Name = name, Text = caption, TextSize = 16, TextColor3 = color or C.muted,
+                Size = UDim2.fromOffset(32, 30), Position = UDim2.new(1, offset, 0, 11), BackgroundColor3 = C.card }, header)
+            round(button, 7)
+            return button
+        end
+        local minimize = headerButton("Minimize", "−", -116)
+        local maximize = headerButton("Maximize", "□", -78)
+        local closeButton = headerButton("CloseAndStop", "×", -40, C.red)
+        local statusDot = el("Frame", { BackgroundColor3 = C.muted, Size = UDim2.fromOffset(6, 6),
+            Position = UDim2.new(1, -134, 0, 23) }, header)
+        round(statusDot, 3)
+        local body = el("Frame", { Name = "Body", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 52),
+            Size = UDim2.new(1, 0, 1, -84) }, panel)
+        local sidebar = el("Frame", { BackgroundColor3 = C.rail, Size = UDim2.new(0, 150, 1, 0) }, body)
+        local sideMark = text("PAINEL LOCAL", UDim2.new(1, -24, 0, 26), UDim2.fromOffset(12, 10), sidebar, C.muted)
+        sideMark.TextSize = 10
+        local navigation = el("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(9, 43),
+            Size = UDim2.new(1, -18, 1, -55) }, sidebar)
+        el("UIListLayout", { Padding = UDim.new(0, 7), SortOrder = Enum.SortOrder.LayoutOrder }, navigation)
+        local content = el("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(166, 0),
+            Size = UDim2.new(1, -182, 1, 0) }, body)
+        local pageTitle = text("Visão geral", UDim2.new(1, 0, 0, 25), UDim2.fromOffset(0, 6), content)
+        pageTitle.Font = Enum.Font.GothamBold
+        pageTitle.TextSize = 19
+        local search = el("TextBox", { Name = "Search", Text = "", PlaceholderText = "Buscar nesta aba...",
+            PlaceholderColor3 = C.muted, ClearTextOnFocus = false, TextSize = 12, TextColor3 = C.text,
+            TextXAlignment = Enum.TextXAlignment.Left, Size = UDim2.new(1, 0, 0, 32),
+            Position = UDim2.fromOffset(0, 39), BackgroundColor3 = C.card }, content)
+        round(search, 8)
+        el("UIPadding", { PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12) }, search)
+        local footer = text("Arraste a barra • Canto ↘ ajusta o tamanho • × encerra", UDim2.new(1, -48, 0, 28),
+            UDim2.new(0, 16, 1, -30), panel, C.muted)
+        footer.TextSize = 10
+        local resizeGrip = el("TextButton", { Name = "ResizeGrip", Text = "◢", TextSize = 21, TextColor3 = C.accent,
+            BackgroundTransparency = 1, Active = true, Size = UDim2.fromOffset(30, 30),
+            Position = UDim2.new(1, -31, 1, -31) }, panel)
+        local function applyGeometry()
+            local x, y, w, h = geometry:rect()
+            panel.Position = UDim2.fromOffset(x, y)
+            panel.Size = UDim2.fromOffset(w, h)
+            body.Visible, footer.Visible = not geometry.minimized, not geometry.minimized
+            resizeGrip.Visible = not geometry.minimized and not geometry.maximized
+            minimize.Text = geometry.minimized and "+" or "−"
+            maximize.Text = geometry.maximized and "▣" or "□"
+            local railWidth = w < 520 and 64 or (w < 580 and 100 or 150)
+            sidebar.Size = UDim2.new(0, railWidth, 1, 0)
+            content.Position = UDim2.fromOffset(railWidth + 16, 0)
+            content.Size = UDim2.new(1, -(railWidth + 32), 1, 0)
+            local compactNames = { Inicio = "Início", Farm = "Farm", Needs = "Necess.", Pets = "Pets",
+                Event = "Evento", Settings = "Ajustes", Support = "Logs" }
+            sideMark.Text = railWidth == 64 and "HUB" or "PAINEL LOCAL"
+            for id, button in pairs(navButtons) do
+                button.Text = railWidth == 64 and compactNames[id] or button:GetAttribute("FullLabel")
+                button.TextSize = railWidth == 64 and 10 or 12
+            end
+            brand.Text = w < 420 and "ADOPT HUB" or "A  /  ADOPT HUB"
+        end
+        local function notice(value)
+            setText(footer, value)
+            messageUntil = os.clock() + 7
         end
         local function at(path)
-            local item = api.Config
+            local node = api.Config
             for _, key in ipairs(path) do
-                item = item and item[key]
+                if type(node) ~= "table" then return nil end
+                node = node[key]
             end
-            return item
+            return node
         end
-        local function toggle(name, path)
-            local btn = button(name, function()
-                local parentTable = api.Config
-                for index = 1, #path - 1 do
-                    parentTable = parentTable[path[index]]
-                end
-                parentTable[path[#path]] = not (parentTable[path[#path]] == true)
-            end)
-            local function refresh()
+        local function put(path, value)
+            local node = api.Config
+            for i = 1, #path - 1 do
+                if type(node[path[i]]) ~= "table" then return false end
+                node = node[path[i]]
+            end
+            node[path[#path]] = value
+            return true
+        end
+        local function refresh()
+            if closed then return end
+            for _, callback in ipairs(refreshers) do callback() end
+        end
+        local function guard(callback)
+            return function(...)
+                if closed then return end
+                local ok, err = pcall(callback, ...)
+                if not ok then notice("Erro: " .. tostring(err)) end
+                if not closed then refresh() end
+            end
+        end
+        local function filter()
+            local query = string.lower(search.Text)
+            for _, row in ipairs(rows) do row.obj.Visible = query == "" or string.find(row.key, query, 1, true) ~= nil end
+        end
+        local pageNames = { {"Inicio", "Início", "Visão geral"}, {"Farm", "Farm", "Controles do farm"},
+            {"Needs", "Necessidades", "Necessidades"}, {"Pets", "Pets / ovos", "Pets, ovos e poções"},
+            {"Event", "Eventos", "Eventos e Pet Pen"}, {"Settings", "Ajustes", "Ajustes de estabilidade"},
+            {"Support", "Diagnóstico", "Estado e diagnóstico"} }
+        local titles = {}
+        for _, spec in ipairs(pageNames) do
+            local id, title = spec[1], spec[2]
+            titles[id] = spec[3]
+            local page = el("ScrollingFrame", { Name = id, Size = UDim2.new(1, 0, 1, -85),
+                Position = UDim2.fromOffset(0, 82), BackgroundTransparency = 1, Visible = id == selected,
+                ScrollBarThickness = 3, ScrollBarImageColor3 = C.accent, CanvasSize = UDim2.fromOffset(0, 0),
+                AutomaticCanvasSize = Enum.AutomaticSize.Y, ScrollingDirection = Enum.ScrollingDirection.Y }, content)
+            el("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, page)
+            el("UIPadding", { PaddingBottom = UDim.new(0, 12), PaddingRight = UDim.new(0, 6) }, page)
+            pages[id] = page
+            local nav = el("TextButton", { Name = "Tab" .. id, Text = title, TextSize = 12, TextColor3 = C.muted,
+                Size = UDim2.new(1, 0, 0, 37), BackgroundColor3 = C.rail, AutoButtonColor = false,
+                TextXAlignment = Enum.TextXAlignment.Left }, navigation)
+            round(nav, 7)
+            el("UIPadding", { PaddingLeft = UDim.new(0, 10) }, nav)
+            navButtons[id] = nav
+            nav:SetAttribute("FullLabel", title)
+            connect(nav.Activated, guard(function() handle.SelectTab(id) end))
+        end
+        -- Replace the navigation container with a scroll area without changing its children.
+        local navScroll = el("ScrollingFrame", { BackgroundTransparency = 1, Size = navigation.Size,
+            Position = navigation.Position, AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.fromOffset(0, 0),
+            ScrollBarThickness = 2, ScrollingDirection = Enum.ScrollingDirection.Y }, sidebar)
+        for _, child in ipairs(navigation:GetChildren()) do child.Parent = navScroll end
+        navigation:Destroy()
+        function handle.SelectTab(id)
+            if not pages[id] then return false end
+            selected = id
+            for key, page in pairs(pages) do
+                page.Visible = key == id
+                navButtons[key].BackgroundColor3 = key == id and C.tint or C.rail
+                navButtons[key].TextColor3 = key == id and C.accent or C.muted
+            end
+            pageTitle.Text = titles[id]
+            search.Text = ""
+            filter()
+            return true
+        end
+        local function row(page, title, description, extraWidth)
+            local frame = el("Frame", { Name = title, BackgroundColor3 = C.card, Size = UDim2.new(1, 0, 0, 66) }, pages[page])
+            round(frame, 9)
+            text(title, UDim2.new(1, -(extraWidth or 70) - 20, 0, 28), UDim2.fromOffset(12, 5), frame)
+            local hint = text(description or "", UDim2.new(1, -(extraWidth or 70) - 20, 0, 25), UDim2.fromOffset(12, 34), frame, C.muted)
+            hint.TextSize = 10
+            table.insert(rows, { obj = frame, key = string.lower(title .. " " .. (description or "")) })
+            return frame
+        end
+        local function heading(page, title)
+            local obj = text(title, UDim2.new(1, 0, 0, 24), UDim2.fromOffset(0, 0), pages[page], C.muted)
+            obj.Font, obj.TextSize = Enum.Font.GothamBold, 11
+        end
+        local function toggle(page, title, description, path)
+            local frame = row(page, title, description)
+            local button = el("TextButton", { Name = "Toggle", Text = "OFF", TextSize = 10, TextColor3 = C.muted,
+                Size = UDim2.fromOffset(48, 25), Position = UDim2.new(1, -59, 0.5, -12), BackgroundColor3 = C.border }, frame)
+            round(button, 12)
+            connect(button.Activated, guard(function()
+                local value = at(path) ~= true
+                if #path == 2 and path[1] == "Farm" and path[2] == "Enabled" and api.SetFarmEnabled then
+                    local ok, message = api.SetFarmEnabled(value)
+                    if not ok then notice(message) end
+                else put(path, value) end
+            end))
+            table.insert(refreshers, function()
                 local enabled = at(path) == true
-                btn.Text = (enabled and "[ATIVADO]  " or "[DESATIVADO]  ") .. name
-                btn.BackgroundColor3 = enabled and COLOR.green or COLOR.button
-            end
-            table.insert(redraw, refresh)
-            refresh()
-        end
-        local function action(name, method, color)
-            button(name, function()
-                if type(api[method]) == "function" then
-                    local ok, message = api[method]()
-                    if not ok and message then
-                        showMessage(message)
-                    end
-                end
-            end, color)
-        end
-        label("SEM HTTP EXTERNO | SEM WEBHOOKS | SEM TELEMETRIA", false)
-        label("Controle principal", true)
-        toggle("Farm em execução", { "Farm", "Enabled" })
-        toggle("Necessidades dos pets", { "Farm", "AutoNeeds", "Enabled" })
-        toggle("Modo bebe", { "Farm", "BabyMode" })
-        toggle("Manter pet equipado", { "Farm", "KeepPetEquipped" })
-        toggle("Anti-AFK", { "Farm", "AntiAfk" })
-        toggle("Comprar ovos com Bucks", { "Farm", "BuyEgg" })
-        toggle("Usar pocoes", { "Farm", "AutoPotions", "Enabled" })
-        toggle("Criar pets Neon", { "Farm", "AutoNeon", "Enabled" })
-        toggle("Criar pets Mega Neon", { "Farm", "AutoNeon", "Mega" })
-        toggle("Abrir presentes", { "Farm", "AutoOpen", "Enabled" })
-        toggle("Coletar cashback", { "Farm", "CollectCashback" })
-
-        label("Halloween e Pet Pen", true)
-        toggle("Eventos habilitados (controle principal)", { "Farm", "Event", "Enabled" })
-        toggle("Ghost Gallery", { "Farm", "Event", "GhostGallery" })
-        toggle("Hauntlet", { "Farm", "Event", "Hauntlet" })
-        toggle("Crypt", { "Farm", "Event", "Crypt" })
-        toggle("Mummy Spider", { "Farm", "Event", "MummySpider" })
-        toggle("Visitar casas para missoes", { "Farm", "Event", "HouseVisits" })
-        toggle("Estoque do Pet Pen", { "Farm", "Event", "PetPenStock" })
-        toggle("Comprar pets com Candy", { "Farm", "Event", "CandyPets", "Enabled" })
-        toggle("Missoes", { "Farm", "Event", "Quests" })
-        toggle("Stray Cat", { "Farm", "Event", "StrayCat" })
-        toggle("Pigeon Nest", { "Farm", "Event", "PigeonNest" })
-        toggle("Pet Pen", { "Farm", "Event", "PetPen" })
-        toggle("Auto Skelicorn", { "Farm", "Event", "AutoSkelicorn" })
-
-        label("Presets (alteram varias configuracoes)", true)
-        local presets = {
-            { "Desligar recursos", "Off" },
-            { "AutoFarm completo", "Balanced" },
-            { "Mega Mummy Spider", "Speedrun" },
-            { "Mega Skelicorn", "Skelicorn" },
-            { "So evento", "EventOnly" },
-            { "So necessidades", "NeedsOnly" },
-            { "Focar no pet / ovo escolhido", "Focus" },
-        }
-        for _, entry in ipairs(presets) do
-            local display, key = entry[1], entry[2]
-            button(display, function()
-                if key == "Focus" and tostring(api.Config.Farm.Focus or "") == "" then
-                    showMessage("Preencha o pet / ovo focado antes de aplicar este preset")
-                    return
-                end
-                local ok, message = api.ApplyPreset(key)
-                showMessage(ok and ("Preset: " .. display) or tostring(message))
-            end, COLOR.primary)
-        end
-        label("Pet / ovo focado (identificador interno)", true)
-        local focused = element("TextBox", {
-            Size = UDim2.new(1, -7, 0, 38), Text = tostring(api.Config.Farm.Focus or ""),
-            PlaceholderText = "Ex.: cracked_egg", ClearTextOnFocus = false,
-            TextColor3 = COLOR.text, TextSize = 13, Font = Enum.Font.Gotham,
-            BackgroundColor3 = COLOR.panel, BorderSizePixel = 0,
-        }, scroll)
-        element("UICorner", { CornerRadius = UDim.new(0, 7) }, focused)
-        focused.FocusLost:Connect(function()
-            api.Config.Farm.Focus = string.match(focused.Text, "^%s*(.-)%s*$") or ""
-        end)
-        table.insert(redraw, function()
-            if not focused:IsFocused() then focused.Text = tostring(api.Config.Farm.Focus or "") end
-        end)
-        local function textSetting(name, path, placeholder)
-            label(name, true)
-            local field = element("TextBox", {
-                Size = UDim2.new(1, -7, 0, 38), Text = tostring(at(path) or ""),
-                PlaceholderText = placeholder, ClearTextOnFocus = false,
-                TextColor3 = COLOR.text, TextSize = 13, Font = Enum.Font.Gotham,
-                BackgroundColor3 = COLOR.panel, BorderSizePixel = 0,
-            }, scroll)
-            element("UICorner", { CornerRadius = UDim.new(0, 7) }, field)
-            field.FocusLost:Connect(function()
-                local node = api.Config
-                for i = 1, #path - 1 do node = node[path[i]] end
-                node[path[#path]] = string.match(field.Text, "^%s*(.-)%s*$") or ""
-            end)
-            table.insert(redraw, function()
-                if not field:IsFocused() then field.Text = tostring(at(path) or "") end
+                setText(button, enabled and "ON" or "OFF")
+                button.BackgroundColor3 = enabled and C.accent or C.border
+                button.TextColor3 = enabled and C.bg or C.muted
             end)
         end
-        textSetting("Ovo a comprar", { "Farm", "EggToBuy" }, "cracked_egg")
-        label("Ordem dos pets", true)
-        local orderNames = { youngest = "Mais novo", oldest = "Mais velho" }
-        local orderButton = button("", function()
+        local function action(page, title, description, callback, color)
+            local frame = row(page, title, description, 70)
+            local button = el("TextButton", { Text = "Executar", TextSize = 10, TextColor3 = C.text,
+                Size = UDim2.fromOffset(60, 27), Position = UDim2.new(1, -71, 0.5, -13), BackgroundColor3 = color or C.tint }, frame)
+            round(button, 7)
+            connect(button.Activated, guard(function()
+                local ok, message = callback()
+                if message then notice(message) end
+                if ok == false and not message then notice("Ação indisponível no momento") end
+            end))
+        end
+        local function field(page, title, description, path, low, high)
+            local frame = row(page, title, description, 110)
+            local input = el("TextBox", { Name = "Field", Text = tostring(at(path) or ""), TextSize = 11, TextColor3 = C.text,
+                ClearTextOnFocus = false, BackgroundColor3 = C.bg, Size = UDim2.fromOffset(96, 30),
+                Position = UDim2.new(1, -108, 0.5, -15) }, frame)
+            round(input, 7)
+            connect(input.FocusLost, guard(function()
+                local value = string.match(input.Text, "^%s*(.-)%s*$") or ""
+                if low then
+                    value = tonumber(value)
+                    if not value or value ~= value or math.abs(value) == math.huge then notice("Digite um número válido"); return end
+                    value = math.max(low, math.min(high, value))
+                end
+                put(path, value)
+            end))
+            table.insert(refreshers, function() if not input:IsFocused() then setText(input, at(path) or "") end end)
+        end
+        local function information(page, title, height)
+            local frame = el("Frame", { BackgroundColor3 = C.card, Size = UDim2.new(1, 0, 0, height or 90) }, pages[page])
+            round(frame, 9)
+            text(title, UDim2.new(1, -24, 0, 22), UDim2.fromOffset(12, 9), frame, C.accent)
+            local info = text("", UDim2.new(1, -24, 1, -43), UDim2.fromOffset(12, 35), frame, C.muted)
+            info.TextSize = 12
+            info.TextYAlignment = Enum.TextYAlignment.Top
+            table.insert(rows, { obj = frame, key = string.lower(title) })
+            return info
+        end
+        local overview = information("Inicio", "SESSÃO", 108)
+        local currentNeeds = information("Inicio", "NECESSIDADES ATIVAS", 96)
+        toggle("Inicio", "Farm em execução", "Pausar cancela as tarefas atuais.", {"Farm", "Enabled"})
+        action("Inicio", "Só necessidades", "Inclui compras de ovos; revise as opções antes de ligar.", function() return api.ApplyPreset("NeedsOnly") end)
+        heading("Farm", "EXECUÇÃO E RECUPERAÇÃO")
+        toggle("Farm", "Farm em execução", "Inicia ou pausa a automação.", {"Farm", "Enabled"})
+        toggle("Farm", "Manter pet equipado", "Mantém um pet disponível para as necessidades.", {"Farm", "KeepPetEquipped"})
+        toggle("Farm", "Modo bebê", "Inclui suas necessidades de bebê.", {"Farm", "BabyMode"})
+        toggle("Farm", "Anti-AFK", "Responde ao aviso de inatividade.", {"Farm", "AntiAfk"})
+        toggle("Farm", "Prioridade inteligente", "Prefere necessidades no local atual.", {"Farm", "SmartPriority"})
+        toggle("Farm", "Coletar cashback", "Usa a coleta existente no jogo.", {"Farm", "CollectCashback"})
+        action("Farm", "Voltar para casa", "Tarefas protegidas terminam antes da viagem.", api.GoHome)
+        action("Farm", "Pular tarefa", "Deixa a tarefa atual descansar.", api.SkipTask)
+        local needsSummary = information("Needs", "FILA EM TEMPO REAL", 144)
+        toggle("Needs", "Necessidades automáticas", "Habilita os tipos escolhidos abaixo.", {"Farm", "AutoNeeds", "Enabled"})
+        toggle("Needs", "Necessidades em paralelo", "Tarefas leves enquanto a principal espera.", {"Farm", "MultiNeed", "Enabled"})
+        heading("Needs", "TIPOS DE NECESSIDADE")
+        local needKeys = {}
+        for kind in pairs(api.Config.Farm.Tasks or {}) do table.insert(needKeys, kind) end
+        table.sort(needKeys)
+        for _, kind in ipairs(needKeys) do toggle("Needs", NEEDS[kind] or kind, kind, {"Farm", "Tasks", kind}) end
+        heading("Pets", "PET SELECIONADO E COMPRAS")
+        field("Pets", "Pet / ovo focado", "Identificador do inventário; exemplo: cracked_egg.", {"Farm", "Focus"})
+        field("Pets", "Ovo a comprar", "Use o identificador interno do ovo.", {"Farm", "EggToBuy"})
+        toggle("Pets", "Comprar ovos", "Gasta Bucks quando a compra for necessária.", {"Farm", "BuyEgg"})
+        toggle("Pets", "Usar poções", "Mantém o controle de intervalo em memória.", {"Farm", "AutoPotions", "Enabled"})
+        toggle("Pets", "Criar Neon", "Pode consumir quatro pets elegíveis.", {"Farm", "AutoNeon", "Enabled"})
+        toggle("Pets", "Criar Mega Neon", "Pode consumir quatro pets Neon elegíveis.", {"Farm", "AutoNeon", "Mega"})
+        toggle("Pets", "Abrir presentes", "Pode consumir presentes do inventário.", {"Farm", "AutoOpen", "Enabled"})
+        action("Pets", "Alternar ordem", "Mais novos ou mais velhos primeiro.", function()
             api.Config.Farm.PetOrder = api.Config.Farm.PetOrder == "oldest" and "youngest" or "oldest"
+            return true, "Ordem: " .. api.Config.Farm.PetOrder
         end)
-        table.insert(redraw, function()
-            orderButton.Text = "Prioridade: " .. (orderNames[api.Config.Farm.PetOrder] or tostring(api.Config.Farm.PetOrder))
+        heading("Pets", "PRESETS")
+        local presets = {{"Off", "Tudo desligado"}, {"Balanced", "AutoFarm completo"}, {"Focus", "Focar no pet / ovo"},
+            {"Speedrun", "Mega Mummy Spider"}, {"Skelicorn", "Mega Skelicorn"}, {"EventOnly", "Só evento"}}
+        for _, preset in ipairs(presets) do
+            local key = preset[1]
+            action("Pets", preset[2], "Pode alterar compras, poções e fusões; revise antes de ligar.", function()
+                if key == "Focus" and (api.Config.Farm.Focus or "") == "" then return false, "Preencha o pet / ovo focado" end
+                return api.ApplyPreset(key)
+            end)
+        end
+        heading("Event", "EVENTOS DISPONÍVEIS NO SCRIPT")
+        toggle("Event", "Eventos habilitados", "Controle principal dos recursos de evento.", {"Farm", "Event", "Enabled"})
+        for _, item in ipairs({{"GhostGallery","Ghost Gallery"},{"Hauntlet","Hauntlet"},{"Crypt","Crypt"},
+            {"MummySpider","Mummy Spider"},{"Quests","Missões"},{"HouseVisits","Visitar casas"},
+            {"StrayCat","Stray Cat"},{"PigeonNest","Pigeon Nest"},{"PetPen","Pet Pen"},
+            {"PetPenStock","Estoque do Pet Pen"},{"AutoSkelicorn","Auto Skelicorn"}}) do
+            toggle("Event", item[2], "Depende do evento e das regras atuais do jogo.", {"Farm", "Event", item[1]})
+        end
+        toggle("Event", "Comprar pets com Candy", "Pode gastar a moeda do evento.", {"Farm", "Event", "CandyPets", "Enabled"})
+        field("Event", "Intervalo do Pet Pen", "Minutos entre verificações (1–120).", {"Farm", "Event", "PetPenMinutes"}, 1, 120)
+        action("Event", "Coletar Pet Pen", "Solicita a coleta quando o farm está ligado.", api.ClaimPetPen)
+        heading("Settings", "ESTABILIDADE")
+        toggle("Settings", "Recuperar travamentos", "Recuperação existente quando há falhas repetidas.", {"Farm", "StuckRecovery", "Enabled"})
+        field("Settings", "Tempo de recuperação", "Segundos sem progresso (60–600).", {"Farm", "StuckRecovery", "Seconds"}, 60, 600)
+        field("Settings", "Espera após erro", "Base em segundos; aumenta em falhas seguidas.", {"Farm", "FailureCooldownSeconds"}, 5, 120)
+        field("Settings", "Limite de falhas", "Número de falhas antes de descansar (1–10).", {"Farm", "MaxConsecutiveFailures"}, 1, 10)
+        field("Settings", "Descanso de tarefas", "Minutos; zero desativa pelo resto da sessão.", {"Farm", "DisableMinutes"}, 0, 60)
+        action("Settings", "Reativar tarefas", "Libera tarefas em espera ou desativadas.", api.RetryDisabled)
+        action("Settings", "Centralizar janela", "Reposiciona o HUB dentro da tela.", function()
+            geometry.maximized, geometry.restore, geometry.minimized = false, nil, false
+            geometry:moveTo((geometry.vw - geometry.w) / 2, (geometry.vh - geometry.h) / 2)
+            applyGeometry(); return true, "Janela centralizada"
         end)
-        label("Presets podem ativar compras e usar pocoes. Farm inicia pausado; revise as opcoes antes de ligar.", false)
-        label("Acoes rapidas", true)
-        action("Voltar para casa", "GoHome")
-        action("Pular tarefa atual", "SkipTask")
-        action("Coletar Pet Pen", "ClaimPetPen")
-        action("Reativar tarefas em descanso", "RetryDisabled")
-        action("PARAR SCRIPT", "Stop", COLOR.red)
-
-        local reopen = element("TextButton", {
-            Size = UDim2.fromOffset(92, 37), Position = UDim2.new(0, 12, 0.5, 0),
-            Text = "Abrir farm", Visible = false, BackgroundColor3 = COLOR.primary,
-            TextColor3 = COLOR.text, Font = Enum.Font.GothamBold, TextSize = 13,
-        }, gui)
-        element("UICorner", { CornerRadius = UDim.new(0, 9) }, reopen)
-        local closed = false
-        local handle = { Owner = api }
-        local inputConnection
+        local diagnostic = information("Support", "ESTADO DO MOTOR", 175)
+        local privacy = information("Support", "PRIVACIDADE", 108)
+        privacy.Text = "Sem telemetria, webhooks ou arquivos locais.\nO HUB usa somente instâncias Roblox.\nO loader faz o download do código do seu repositório."
+        action("Support", "Reabrir tarefas", "Libera os intervalos de espera após falhas.", api.RetryDisabled)
+        action("Support", "Encerrar script", "Fecha o HUB e cancela a automação.", function() api.Stop("closed from HUB"); return true end, C.red)
         function handle.Close()
             if closed then return end
             closed = true
-            if inputConnection then inputConnection:Disconnect() end
-            gui:Destroy()
+            scope.cleanup()
             if Interface.current == handle then Interface.current = nil end
         end
-        local function flip()
-            panel.Visible = not panel.Visible
-            reopen.Visible = not panel.Visible
+        function handle.Minimize() geometry:toggleMinimize(); applyGeometry() end
+        function handle.Maximize() geometry:toggleMaximize(); applyGeometry() end
+        local gesture
+        local function beginGesture(input, mode)
+            if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            if geometry.maximized then return end
+            gesture = { input = input, touch = input.UserInputType == Enum.UserInputType.Touch, mode = mode,
+                px = input.Position.X, py = input.Position.Y, x = geometry.x, y = geometry.y, w = geometry.w, h = geometry.h }
         end
-        minimize.Activated:Connect(flip)
-        reopen.Activated:Connect(flip)
+        connect(dragArea.InputBegan, function(input) beginGesture(input, "move") end)
+        connect(resizeGrip.InputBegan, function(input) beginGesture(input, "resize") end)
+        connect(UIS.InputChanged, function(input)
+            if not gesture then return end
+            if gesture.touch and input ~= gesture.input then return end
+            if not gesture.touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then return end
+            local dx, dy = input.Position.X - gesture.px, input.Position.Y - gesture.py
+            if gesture.mode == "move" then geometry:moveTo(gesture.x + dx, gesture.y + dy)
+            else geometry:resizeTo(gesture.w + dx, gesture.h + dy) end
+            applyGeometry()
+        end)
+        connect(UIS.InputEnded, function(input)
+            if gesture and (input == gesture.input or (not gesture.touch and input.UserInputType == Enum.UserInputType.MouseButton1)) then gesture = nil end
+        end)
         local keybind = Enum.KeyCode.RightShift
-        pcall(function()
-            keybind = Enum.KeyCode[tostring(api.Config.Interface.Keybind or "RightShift")]
+        pcall(function() keybind = Enum.KeyCode[tostring(api.Config.Interface.Keybind or "RightShift")] end)
+        connect(UIS.InputBegan, function(input, processed)
+            if not processed and not UIS:GetFocusedTextBox() and input.KeyCode == keybind then handle.Minimize() end
         end)
-        inputConnection = UIS.InputBegan:Connect(function(input, processed)
-            if not processed and not UIS:GetFocusedTextBox() and input.KeyCode == keybind then
-                flip()
+        connect(minimize.Activated, handle.Minimize)
+        connect(maximize.Activated, handle.Maximize)
+        connect(closeButton.Activated, function() api.Stop("closed from HUB"); handle.Close() end)
+        connect(search:GetPropertyChangedSignal("Text"), filter)
+        local cameraConnection
+        local function watchCamera()
+            if cameraConnection then cameraConnection:Disconnect() end
+            local active = workspace.CurrentCamera
+            if not active then return end
+            local function changed()
+                geometry:setViewport(active.ViewportSize.X, active.ViewportSize.Y)
+                gesture = nil
+                applyGeometry()
             end
-        end)
-        Interface.current = handle
-        if api.Config.Interface.StartHidden == true then flip() end
-        task.spawn(function()
+            cameraConnection = active:GetPropertyChangedSignal("ViewportSize"):Connect(changed)
+            scope.cameraConnection = cameraConnection
+            changed()
+        end
+        connect(workspace:GetPropertyChangedSignal("CurrentCamera"), watchCamera)
+        watchCamera()
+        local function renderStatus()
+            local ok, info = pcall(api.Status)
+            if not ok or type(info) ~= "table" then notice("Aguardando dados do jogo"); return end
+            if info.stopped then handle.Close(); return end
+            statusDot.BackgroundColor3 = info.farmEnabled and C.green or C.muted
+            if geometry.minimized then return end
+            local state = info.farmEnabled and (info.ready and "EM EXECUÇÃO" or "AGUARDANDO O JOGO") or "PAUSADO"
+            setText(overview, string.format("%s   •   %s min\nBucks: %s   •   Candy: %s\nNecessidades concluídas: %s\nTarefa: %s", state,
+                tostring(info.minutes or 0), tostring(info.bucks or "—"), tostring(info.candy or "—"), tostring(info.needsDone or 0), NEEDS[info.task] or info.task or "nenhuma"))
+            local short, long = {}, {}
+            for i, entry in ipairs(info.needs or {}) do
+                if i > 12 then table.insert(long, "+ outras necessidades"); break end
+                local who = entry.owner == "baby" and "Bebê" or "Pet"
+                local progress = math.floor(math.max(0, math.min(1, tonumber(entry.progress) or 0)) * 100)
+                local line = who .. " • " .. (NEEDS[entry.kind] or tostring(entry.kind))
+                    .. (entry.inProgress and (" • " .. progress .. "%") or " • aguardando")
+                table.insert(long, line)
+                if i <= 3 then table.insert(short, line) end
+            end
+            setText(currentNeeds, #short > 0 and table.concat(short, "\n") or "Nenhuma necessidade ativa no momento.")
+            setText(needsSummary, #long > 0 and table.concat(long, "\n") or "Sem necessidades ativas. Verifique pet equipado e modo bebê.")
+            needsSummary.Parent.Size = UDim2.new(1, 0, 0, math.max(144, 55 + #long * 22))
+            local waits = {}
+            for key, seconds in pairs(info.retrySeconds or {}) do table.insert(waits, (NEEDS[key] or key) .. ": " .. seconds .. "s") end
+            table.sort(waits)
+            local details = "Tarefa: " .. tostring(info.task or "nenhuma") .. "\n"
+                .. "Motivo: " .. tostring(info.waitReason or (info.ready and "sem tarefa pendente" or "jogo não está pronto")) .. "\n"
+                .. "Sucessos: " .. tostring(info.tasksSucceeded or 0) .. " • Falhas: " .. tostring(info.tasksFailed or 0) .. "\n"
+                .. "Descansando: " .. table.concat(info.disabled or {}, ", ") .. "\n"
+                .. "Nova tentativa: " .. (#waits > 0 and table.concat(waits, ", ") or "nenhuma")
+            setText(diagnostic, details)
+            if os.clock() >= messageUntil then setText(footer, "Arraste a barra • Canto ↘ ajusta o tamanho • × encerra") end
+            refresh()
+        end
+        handle.SelectTab("Inicio")
+        if api.Config.Interface.StartHidden == true then geometry:toggleMinimize() end
+        applyGeometry()
+        renderStatus()
+        scope.thread = task.spawn(function()
             while not closed and gui.Parent do
-                local ok, info = pcall(api.Status)
-                if ok and type(info) == "table" then
-                    if info.stopped then
-                        handle.Close()
-                        break
-                    end
-                    if os.clock() >= statusMessageUntil then
-                        status.Text = string.format("Farm: %s | Bucks: %s | Candy: %s | Tarefa: %s | Feitas: %s",
-                            info.farmEnabled and (info.ready and "ON" or "aguardando jogo") or "pausado", tostring(info.bucks or "?"),
-                            tostring(info.candy or "?"), tostring(info.task or "nenhuma"),
-                            tostring(info.needsDone or "0"))
-                    end
+                task.wait(1)
+                if not closed then
+                    local ok, err = pcall(renderStatus)
+                    if not ok then notice("Falha ao atualizar painel: " .. tostring(err)) end
                 end
-                for _, refresh in ipairs(redraw) do refresh() end
-                task.wait(2)
             end
+            if not closed then handle.Close() end
         end)
         return handle
     end
+    function Interface.start(api, options)
+        assert(type(api) == "table" and type(api.Config) == "table", "API do HUB indisponível")
+        if Interface.current then Interface.current.Close() end
+        local scope = { connections = {} }
+        function scope.cleanup()
+            for _, connection in ipairs(scope.connections) do pcall(function() connection:Disconnect() end) end
+            scope.connections = {}
+            if scope.cameraConnection then pcall(function() scope.cameraConnection:Disconnect() end) end
+            if scope.thread and coroutine.running() ~= scope.thread then pcall(task.cancel, scope.thread) end
+            if scope.gui then pcall(function() scope.gui:Destroy() end) end
+        end
+        local ok, result = pcall(build, api, scope)
+        if not ok then scope.cleanup(); error(result, 0) end
+        Interface.current = result
+        return result
+    end
     return Interface
 end
+
 __moduleSources["Game/GameConstants"] = function(...)
     local GameConstants = {}
     GameConstants.PlaceId = 920587237
@@ -3565,10 +3798,14 @@ __moduleSources["Game/AilmentTracker"] = function(...)
         end
         return "pet " .. tostring(entry.petKind or "?")
     end
+    local function finiteNumber(value, fallback)
+        local number = tonumber(value)
+        return number and number == number and math.abs(number) < math.huge and number or fallback
+    end
     local function readEntry(rawEntry, kindKey)
         local components = type(rawEntry) == "table" and rawEntry.components
         local preference = type(components) == "table" and components.preference
-        local rate = type(rawEntry) == "table" and tonumber(rawEntry.rate) or 0
+        local rate = type(rawEntry) == "table" and math.max(0, finiteNumber(rawEntry.rate, 0)) or 0
         local mysteryOptions = nil
         local mystery = type(components) == "table" and components.mystery
         if type(mystery) == "table" and type(mystery.components) == "table" then
@@ -3584,8 +3821,8 @@ __moduleSources["Game/AilmentTracker"] = function(...)
             kind = tostring(type(rawEntry) == "table" and rawEntry.kind or kindKey),
             rate = rate,
             inProgress = rate > 0,
-            progress = type(rawEntry) == "table" and tonumber(rawEntry.progress) or 0,
-            createdAt = type(rawEntry) == "table" and tonumber(rawEntry.created_timestamp) or nil,
+            progress = type(rawEntry) == "table" and math.max(0, math.min(1, finiteNumber(rawEntry.progress, 0))) or 0,
+            createdAt = type(rawEntry) == "table" and finiteNumber(rawEntry.created_timestamp, nil) or nil,
             preferredItem = type(preference) == "table" and preference.item_kind or nil,
         }
     end
@@ -3615,7 +3852,9 @@ __moduleSources["Game/AilmentTracker"] = function(...)
             end
         end
         table.sort(list, function(a, b)
-            return (a.createdAt or 0) < (b.createdAt or 0)
+            local aTime, bTime = a.createdAt or 0, b.createdAt or 0
+            if aTime ~= bTime then return aTime < bTime end
+            return entryId(a) < entryId(b)
         end)
         return list
     end
@@ -11515,9 +11754,8 @@ __moduleSources["Game/TaskManager"] = function(...)
         end)
     end
     function TaskManager:_isDoable(entry)
-        if entry.owner ~= "pet" or not self._gameData then
-            return true
-        end
+        if entry.owner == "baby" then return self._farmConfig.BabyMode == true end
+        if not self._gameData then return false end
         return self._gameData:isPetEquipped(entry.petUnique)
     end
     function TaskManager:_group(kind)
@@ -11573,7 +11811,8 @@ __moduleSources["Game/TaskManager"] = function(...)
             for _, entry in ipairs(self._state:get("ailments.active", {})) do
                 local destination = GameConstants.LocationForAilment[entry.kind]
                 if entry.inProgress and destination and not GameConstants.SpotForAilment[entry.kind]
-                    and not self._disabled[entry.kind] and GameConstants.needOn(self._farmConfig, entry.kind)
+                    and not self:_isBlocked(entry.kind) and self:_isDoable(entry)
+                    and Tasks.findFor(entry.kind) and GameConstants.needOn(self._farmConfig, entry.kind)
                     and self._travel:isAt(destination) then
                     local group = self:_group(entry.kind)
                     if group then
@@ -11691,6 +11930,11 @@ __moduleSources["Game/TaskManager"] = function(...)
         return context
     end
     function TaskManager:_start(key, label, taskDefinition, group, isEventJob, side)
+        if self._stopped or not self._farmConfig.Enabled or (self._cleanupCount or 0) > 0 then return false end
+        if type(taskDefinition) ~= "table" or type(taskDefinition.run) ~= "function" then
+            self._logger:warn("Tasks", "Task definition unavailable: " .. tostring(key))
+            return false
+        end
         local slot = side and "_side" or "_running"
         local attempt = (self._failures[key] or 0) + 1
         local runMaid = Maid.new()
@@ -11740,14 +11984,21 @@ __moduleSources["Game/TaskManager"] = function(...)
         if running.thread and coroutine.running() ~= running.thread then
             pcall(task.cancel, running.thread)
         end
+        self._cleanupCount = (self._cleanupCount or 0) + 1
         task.spawn(function()
-            running.maid:Clean()
+            local ok, err = pcall(running.maid.Clean, running.maid)
+            self._cleanupCount = math.max(0, self._cleanupCount - 1)
+            if not ok then self._logger:warn("Tasks", "Cleanup failed: " .. tostring(err)) end
         end)
         if slot == "_running" then
             self._state:set("farm.currentTask", "none", "TaskManager")
         end
         local key = running.key
         local seconds = Util.now() - running.startedAt
+        if result == "CANCELLED" then
+            self._logger:info("Tasks", string.format("Stopped: %s after %.1f s (%s)", running.label, seconds, tostring(reason)))
+            return -- Pause/stop is not a failed task and must not postpone an event.
+        end
         if result == "INTERRUPTED" then
             if running.eventJob then
                 self._nextEventAt[key] = 0
@@ -11785,10 +12036,6 @@ __moduleSources["Game/TaskManager"] = function(...)
             return
         end
         self._state:increment("farm.tasksFailed", 1, "TaskManager")
-        if result == "CANCELLED" then
-            self._logger:info("Tasks", string.format("Stopped: %s after %.1f s (%s)", running.label, seconds, tostring(reason)))
-            return
-        end
         if type(reason) == "string" and string.sub(reason, 1, 3) == "no " and string.find(reason, " in your house", 1, true) then
             self._cooldownUntil[key] = Util.now() + NO_FURNITURE_SKIP_SECONDS
             self._logger:info("Tasks", string.format("Skipped for %d min: %s — %s (buy one to farm this need)",
@@ -11797,7 +12044,9 @@ __moduleSources["Game/TaskManager"] = function(...)
         end
         local failures = (self._failures[key] or 0) + 1
         self._failures[key] = failures
-        self._cooldownUntil[key] = Util.now() + self._farmConfig.FailureCooldownSeconds
+        local baseWait = math.max(1, tonumber(self._farmConfig.FailureCooldownSeconds) or 30)
+        local retryWait = math.min(math.max(baseWait, 120), baseWait * (2 ^ math.min(failures - 1, 6)))
+        self._cooldownUntil[key] = Util.now() + retryWait
         if self._watch then
             self._watch.failures += 1
         end
@@ -11813,7 +12062,7 @@ __moduleSources["Game/TaskManager"] = function(...)
                 self._logger:error("Tasks", message .. string.format(" (%d failures in a row: disabled for this session)", failures))
             end
         else
-            self._logger:warn("Tasks", message .. string.format(" (retry in %d s)", self._farmConfig.FailureCooldownSeconds))
+            self._logger:warn("Tasks", message .. string.format(" (retry in %d s)", retryWait))
         end
     end
     function TaskManager:_trackPet()
@@ -11855,12 +12104,17 @@ __moduleSources["Game/TaskManager"] = function(...)
             end
         end
         table.sort(disabled)
+        local retrySeconds = {}
+        for key, untilTime in pairs(self._cooldownUntil) do
+            if untilTime > Util.now() then retrySeconds[key] = math.ceil(untilTime - Util.now()) end
+        end
         local restMinutes = {}
         for key, untilTime in pairs(self._disabledUntil or {}) do
             restMinutes[key] = math.max(0, math.ceil((untilTime - Util.now()) / 60))
         end
         return { idle = idle, busyMinutes = math.floor((self._busy or 0) / 6 + 0.5) / 10, disabled = disabled,
-            restMinutes = restMinutes, running = self._running and self._running.label or nil,
+            restMinutes = restMinutes, retrySeconds = retrySeconds, waitReason = self._why,
+            running = self._running and self._running.label or nil,
             side = self._side and self._side.label or nil }
     end
     function TaskManager:_hasWork()
@@ -11960,7 +12214,12 @@ __moduleSources["Game/TaskManager"] = function(...)
     end
     function TaskManager:_tickInner()
         if self._stopped or not self._farmConfig.Enabled then
+            self:pause(self._stopped and "farm stopped" or "farm paused")
             self._why = self._stopped and "stopped" or "Farm.Enabled = false (watch only)"
+            return
+        end
+        if (self._cleanupCount or 0) > 0 then
+            self._why = "cleaning up the previous task"
             return
         end
         if self:_whiteScreenCheck() then
@@ -12647,7 +12906,12 @@ __moduleSources["Game/TaskManager"] = function(...)
     end
     function TaskManager:retryDisabled()
         local count = 0
-        for _ in pairs(self._disabled) do
+        local resting = {}
+        for key in pairs(self._disabled) do resting[key] = true end
+        for key, untilTime in pairs(self._cooldownUntil) do
+            if untilTime > Util.now() then resting[key] = true end
+        end
+        for _ in pairs(resting) do
             count += 1
         end
         self._disabled = {}
@@ -12729,6 +12993,10 @@ __moduleSources["Game/TaskManager"] = function(...)
             info.nextClaimIn = at and math.max(0, math.floor(at - Util.now())) or 0
         end
         return info
+    end
+    function TaskManager:pause(reason)
+        self:_finish("CANCELLED", reason or "farm paused")
+        self:_finish("CANCELLED", reason or "farm paused", "_side")
     end
     function TaskManager:stop()
         if self._stopped then
@@ -13581,7 +13849,8 @@ __moduleSources["main"] = function(...)
             end
             local needs = {}
             for _, entry in ipairs(state:get("ailments.active", {})) do
-                table.insert(needs, { owner = entry.owner, kind = entry.kind, inProgress = entry.inProgress == true })
+                table.insert(needs, { owner = entry.owner, kind = entry.kind, petUnique = entry.petUnique,
+                    inProgress = entry.inProgress == true, progress = entry.progress or 0 })
             end
             local nextRoundIn = nil
             pcall(function()
@@ -13615,6 +13884,8 @@ __moduleSources["main"] = function(...)
                 pen = taskManager and taskManager:getPenInfo() or nil,
                 webhooksOn = notifier:isEnabled(),
                 restMinutes = diagnostics.restMinutes,
+                retrySeconds = diagnostics.retrySeconds,
+                waitReason = diagnostics.waitReason,
                 version = Disclosure.VERSION,
                 stopped = stopped,
                 farmEnabled = config.Farm.Enabled == true,
@@ -13641,6 +13912,13 @@ __moduleSources["main"] = function(...)
                 disabled = diagnostics.disabled,
                 line = petLocator and buildStatusLine(state, petLocator) or nil,
             }
+        end
+        function api.SetFarmEnabled(enabled)
+            if stopped then return false, "Script encerrado; execute o loader novamente" end
+            if type(enabled) ~= "boolean" then return false, "Use true ou false" end
+            config.Farm.Enabled = enabled
+            if not enabled and taskManager then taskManager:pause("paused from HUB") end
+            return true, enabled and "Farm ligado" or "Farm pausado"
         end
         local function quickAction(run)
             if stopped then
@@ -13727,6 +14005,7 @@ __moduleSources["main"] = function(...)
             end
             config.Preset = preset.id
             config.Farm.Event.Enabled = preset.id ~= "Off" and preset.id ~= "NeedsOnly"
+            if config.Farm.Enabled == false and taskManager then taskManager:pause("preset paused the farm") end
             logger:info("Core", "Preset applied: " .. preset.name)
             return true, preset.name
         end

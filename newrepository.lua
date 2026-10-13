@@ -1,122 +1,22 @@
--- AdoptMe Private Local 1.3 | native HUB and needs stability revision.
--- This check is editable client code, not encryption or copy protection.
--- Set your public numeric Roblox UserId below, or provide it explicitly in loader.lua.
-local PRIVATE_OWNER_USER_ID = 175617267
-local __environment = (type(getgenv) == "function" and getgenv()) or _G
-local __configuredOwner = PRIVATE_OWNER_USER_ID
-if __configuredOwner == 0 then
-    __configuredOwner = __environment.AdoptMePrivateOwnerUserId
-end
-if type(__configuredOwner) ~= "number" or __configuredOwner <= 0
-    or __configuredOwner ~= math.floor(__configuredOwner) or __configuredOwner == math.huge then
-    error("[AdoptMe Private] Configure seu UserId numerico no arquivo ou no loader; o valor 0 nao funciona", 0)
-end
-local __ownerPlayer = game:GetService("Players").LocalPlayer
-if not __ownerPlayer or __ownerPlayer.UserId ~= __configuredOwner then
-    error("[AdoptMe Private] Esta conta nao corresponde ao UserId configurado", 0)
-end
-
+-- AdoptMe Local Stable 1.4 | consolidated revision of the supplied 14,303-line source.
+-- Local execution; no configured Owner/UserId, HTTP, webhook or remote-code dependency.
+-- Starts paused. Equip your pet(s), then enable Farm in the HUB.
+-- Internal game protocols still require live validation; see review/REVISAO.md.
 local UserConfig = {
     Farm = {
         Enabled = false,
+        AutoNeeds = { Enabled = true },
         BabyMode = false,
-        AutoNeeds = {
-            Enabled = false,
-            Skip = {},
-        },
-        KeepPetEquipped = false,
-        PreferNeon = true,
-        PetOrder = "youngest",
-        FarmPetKinds = {},
-        BuyEgg = false,
-        EggToBuy = "cracked_egg",
-        Focus = "", -- "Mega a pet": an egg (buy + hatch on repeat) or a pet kind (grow, neon, mega it; Pet Pen copies)
-        AutoPotions = {
-            Enabled = false,
-            Skip = {},
-        },
-        AutoNeon = {
-            Enabled = false,
-            Mega = false,
-        },
-        CollectCashback = false,
-        AutoOpen = {
-            Enabled = false,
-        },
-        AutoAcceptMenu = true,
-        AntiAfk = true,
-        CameraGuard = true,
-        AutoRejoin = false,
-        SpotTravel = "teleport",
-        GameTravel = true,
-        HomeByRespawn = true,
-        FoodBowlTrip = false,
-        StuckRecovery = {
-            Enabled = true,
-            Seconds = 240,
-        },
-        DisableMinutes = 15,
-        Event = {
-            GhostGallery = false,
-            Hauntlet = false,
-            HauntletMove = "tween", -- how the bot reaches a door's circle: "tween" (smooth) | "walk" | "tp"
-            HauntletMoveSeconds = 0.5, -- tween: seconds to reach the circle (0.1 - 5)
-            HauntletFirst = true, -- a Hauntlet run before a Ghost Gallery round when both are near
-            HauntletSquad = true, -- your accounts in one run play as a team (phone / keys / wand by turns)
-            HauntletSquadKey = "", -- private: only accounts with the relay's SQUAD_KEY ask it who is in the run (never shared)
-            StrayCat = false,
-            Crypt = false,
-            CryptOpen = { "ladder" },
-            PigeonNest = false,
-            AutoSkelicorn = false, -- Crypt -> Lightning Lever -> the machine by the Manor -> buy 1 Skelicorn (120k candy)
-            CandyPets = {
-                Enabled = false,
-                Pick = {}, -- what to buy (Skelicorn too): one every 0.5 s until the candy runs out
-                MaxBuy = false, -- true: as many as the candy pays for, in ONE purchase
-            },
-            Quests = false,
-            HouseVisits = false,
-            PetPen = false,
-            PetPenMinutes = 15,
-            PetPenSlots = 4,
-            PetPenStock = false,
-        },
+        KeepPetEquipped = true,
+        KeepEquippedPair = true,
+        TwoPets = true,
+        BuyFood = false, -- opt in using the HUB if purchases with Bucks are desired
+        BuyWater = false,
     },
-    Interface = { Enabled = true, Keybind = "RightShift", Toasts = true, RememberSettings = true, Theme = "Halloween",
-        Descriptions = false, StartHidden = false, Language = "Auto" },
-    Logging = {
-        ConsoleLevel = "OFF",
-        FileEnabled = false,
-        SessionFile = false,
-    },
-    Telemetry = {
-        Enabled = false,
-        IncludeInventory = false,
-    },
-    Notifications = {
-        Enabled = false,
-        Webhooks = {
-            Summary = "",
-            Alerts = "",
-        },
-        SummaryIntervalMinutes = 30,
-        SendOnTaskComplete = false,
-        SendOnError = true,
-        SendOnKick = true,
-        SendOnStartStop = true,
-        SendTestMessageOnStart = false,
-        PingDiscordUserId = "",
-        PingOn = {
-            Kick = true,
-            Error = true,
-            Summary = true,
-            TaskCompleted = true,
-            SessionStopped = true,
-            PreviousSession = true,
-        },
-        IncludeUsername = true,
-    },
+    Logging = { ConsoleLevel = "WARN", FileEnabled = false, SessionFile = false },
+    Interface = { Enabled = true, Language = "pt", RememberSettings = true },
 }
+local __startupCleanup
 local __moduleSources = {}
 local __moduleCache = {}
 local __LOADING = {}
@@ -138,6 +38,7 @@ local function import(moduleName)
         __moduleCache[moduleName] = nil
         error("Module " .. moduleName .. ": " .. tostring(result), 2)
     end
+    if result == nil then result = true end
     __moduleCache[moduleName] = result
     return result
 end
@@ -147,14 +48,14 @@ __moduleSources["Core/Enums"] = function(...)
         for _, itemName in ipairs(itemNames) do
             items[itemName] = itemName
         end
-        return setmetatable(items, {
+        return table.freeze(setmetatable(items, {
             __index = function(_, key)
                 error(string.format("%s.%s is not a valid enum item", enumName, tostring(key)), 2)
             end,
             __newindex = function()
                 error(enumName .. " is read-only", 2)
             end,
-        })
+        }))
     end
     local Enums = {}
     Enums.LogLevel = createEnum("LogLevel", { "DEBUG", "INFO", "SUCCESS", "WARN", "ERROR" })
@@ -254,6 +155,7 @@ __moduleSources["Core/Signal"] = function(...)
         local listener = { handler = handler, connected = true }
         table.insert(self._listeners, listener)
         local connection = { Connected = true }
+        listener.connection = connection
         function connection.Disconnect()
             if not listener.connected then
                 return
@@ -283,6 +185,7 @@ __moduleSources["Core/Signal"] = function(...)
     function Signal:DisconnectAll()
         for _, listener in ipairs(self._listeners) do
             listener.connected = false
+            listener.connection.Connected = false
         end
         table.clear(self._listeners)
     end
@@ -347,7 +250,7 @@ __moduleSources["Core/Config"] = function(...)
     local Config = {}
     Config.Defaults = {
         General = {
-            ScriptName = "Adopt Victims",
+            ScriptName = "AdoptMe Local Stable",
             TickSeconds = 0.5,
         },
         Farm = {
@@ -375,7 +278,7 @@ __moduleSources["Core/Config"] = function(...)
                 ride = true,
             },
             AutoNeeds = {
-                Enabled = false,
+                Enabled = true,
                 Skip = {},
             },
             MultiNeed = {
@@ -410,7 +313,7 @@ __moduleSources["Core/Config"] = function(...)
             CollectCashback = false,
             CashbackMinutes = 10,
             SpotTravel = "teleport",
-            KeepPetEquipped = false,
+            KeepPetEquipped = true,
             GameTravel = true,
             HomeByRespawn = true,
             HouseDoorExit = false,
@@ -421,8 +324,8 @@ __moduleSources["Core/Config"] = function(...)
             EggToBuy = "cracked_egg",
             Focus = "", -- focus pet / egg ("" = none): see GameConstants.focusOf
             MaxEggBuysPerSession = 0,
-            BuyWater = true,
-            BuyFood = true,
+            BuyWater = false,
+            BuyFood = false,
             MaxBuysPerSession = 0,
             TwoPets = true, -- Requires two slots authorized by the game (e.g. an active Pet Certificate).
             KeepEquippedPair = true,
@@ -510,8 +413,8 @@ __moduleSources["Core/Config"] = function(...)
         Logging = {
             ConsoleLevel = "INFO",
             FileLevel = "DEBUG",
-            FileEnabled = true,
-            SessionFile = true,
+            FileEnabled = false,
+            SessionFile = false,
             Folder = "AdoptMeFarm/logs",
             FlushSeconds = 5,
             DuplicateWindowSeconds = 10,
@@ -703,16 +606,19 @@ __moduleSources["Core/Config"] = function(...)
     })
     Config.Presets = {
         { id = "NeedsStable", name = "Stable Needs", icon = "heart",
-            about = "Baby + two authorized pets, sequential needs; egg purchases off; starts paused.",
+            about = "Protected pets, sequential needs; baby and purchases opt in; starts paused.",
             set = join(ALL_NEEDS, {
                 { { "Farm", "Enabled" }, false },
-                { { "Farm", "BabyMode" }, true },
+                { { "Farm", "BabyMode" }, false },
                 { { "Farm", "KeepPetEquipped" }, true },
                 { { "Farm", "TwoPets" }, true },
                 { { "Farm", "KeepEquippedPair" }, true },
                 { { "Farm", "PrioritizeNeeds" }, true },
                 { { "Farm", "MultiNeed", "Enabled" }, false },
                 { { "Farm", "BuyEgg" }, false },
+                { { "Farm", "BuyFood" }, false },
+                { { "Farm", "BuyWater" }, false },
+                { { "Farm", "Event", "Enabled" }, false },
             }) },
         { id = "Off", name = "Everything Off", icon = "power",
             about = "Every feature off (the defaults). Anti-AFK and the Play button stay on.",
@@ -780,7 +686,9 @@ __moduleSources["Core/Config"] = function(...)
         local values = {}
         for _, list in ipairs({ Config.FEATURE_PATHS, Config.PRESET_EXTRA_PATHS }) do
             for _, path in ipairs(list) do
-                table.insert(values, { path, deepCopy(valueAt(Config.Defaults, path)) })
+                local value = deepCopy(valueAt(Config.Defaults, path))
+                if list == Config.FEATURE_PATHS then value = false end
+                table.insert(values, { path, value })
             end
         end
         for _, entry in ipairs(preset.set) do
@@ -843,7 +751,8 @@ __moduleSources["Core/Config"] = function(...)
             return false
         end
         local n = 0
-        for _ in pairs(value) do
+        for key in pairs(value) do
+            if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then return false end
             n += 1
         end
         return n == #value
@@ -851,10 +760,27 @@ __moduleSources["Core/Config"] = function(...)
     local function merge(defaults, overrides, path, warnings)
         local result = {}
         for key, defaultValue in pairs(defaults) do
-            local overrideValue = overrides and overrides[key]
+            local overrideValue
+            if type(overrides) == "table" then overrideValue = overrides[key] end
             local keyPath = path == "" and key or (path .. "." .. key)
             if isList(defaultValue) and isList(overrideValue) then
-                result[key] = table.clone(overrideValue)
+                local cleaned = {}
+                for _, item in ipairs(overrideValue) do
+                    if type(defaultValue[1]) == "table" then
+                        -- Candy shop records are the only structured config list. Missing
+                        -- IDs/prices cannot silently become a purchase of the first default item.
+                        local id = type(item) == "table" and (item.id or item[1])
+                        local price = type(item) == "table" and tonumber(item.price)
+                        local max = type(item) == "table" and tonumber(item.max) or 0
+                        if type(id) == "string" and id ~= "" and price and price == price and price > 0 and price < math.huge
+                            and max and max == max and max >= 0 and max < math.huge then
+                            table.insert(cleaned, { id = id, price = price, max = math.floor(max), machine = item.machine == true })
+                        else table.insert(warnings, keyPath .. " contains an invalid shop record") end
+                    elseif type(item) == "string" and item ~= "" then
+                        if not table.find(cleaned, item) then table.insert(cleaned, item) end
+                    else table.insert(warnings, keyPath .. " expects a list of strings") end
+                end
+                result[key] = cleaned
                 continue
             end
             if type(defaultValue) == "table" then
@@ -864,6 +790,9 @@ __moduleSources["Core/Config"] = function(...)
                 end
                 result[key] = merge(defaultValue, overrideValue, keyPath, warnings)
             elseif overrideValue == nil then
+                result[key] = defaultValue
+            elseif type(overrideValue) == "number" and (overrideValue ~= overrideValue or math.abs(overrideValue) == math.huge) then
+                table.insert(warnings, keyPath .. " must be finite; default used")
                 result[key] = defaultValue
             elseif type(overrideValue) ~= type(defaultValue) then
                 table.insert(warnings, string.format("%s must be a %s (got %s); default used", keyPath, type(defaultValue), type(overrideValue)))
@@ -885,7 +814,10 @@ __moduleSources["Core/Config"] = function(...)
     function Config.build(userConfig)
         local warnings = {}
         local base = Config.Defaults
-        local overrides = userConfig or {}
+        local overrides = type(userConfig) == "table" and userConfig or {}
+        if userConfig ~= nil and type(userConfig) ~= "table" then
+            table.insert(warnings, "Settings must be a table; defaults used")
+        end
         local presetId
         if type(overrides) == "table" and overrides.Preset ~= nil then
             local values, preset = Config.presetValues(overrides.Preset,
@@ -933,6 +865,20 @@ __moduleSources["Core/Config"] = function(...)
         notifications.MinSecondsBetweenMessages = math.max(1, notifications.MinSecondsBetweenMessages)
         config.General.TickSeconds = math.clamp(config.General.TickSeconds, 0.1, 5)
         config.Logging.FlushSeconds = math.clamp(config.Logging.FlushSeconds, 1, 60)
+        config.Farm.MaxConsecutiveFailures = math.clamp(math.floor(config.Farm.MaxConsecutiveFailures), 1, 10)
+        config.Farm.FailureCooldownSeconds = math.clamp(config.Farm.FailureCooldownSeconds, 1, 120)
+        config.Farm.DisableMinutes = math.clamp(config.Farm.DisableMinutes, 0, 1440)
+        config.Farm.Event.PetPenSlots = math.clamp(math.floor(config.Farm.Event.PetPenSlots), 1, 12)
+        config.Farm.MaxBuysPerSession = math.clamp(math.floor(config.Farm.MaxBuysPerSession), 0, 1000)
+        config.Farm.MaxEggBuysPerSession = math.clamp(math.floor(config.Farm.MaxEggBuysPerSession), 0, 1000)
+        config.Farm.Event.PetPenMinutes = math.clamp(config.Farm.Event.PetPenMinutes, 1, 120)
+        config.Farm.Event.CandyPets.KeepCandy = math.max(0, config.Farm.Event.CandyPets.KeepCandy)
+        config.Farm.StuckRecovery.Seconds = math.clamp(config.Farm.StuckRecovery.Seconds, 60, 3600)
+        config.Farm.StuckRejoinSeconds = math.clamp(config.Farm.StuckRejoinSeconds, 120, 3600)
+        config.Farm.AutoPotions.BuffMinutes = math.clamp(config.Farm.AutoPotions.BuffMinutes, 0, 1440)
+        config.Farm.MultiNeed.GapSeconds = math.clamp(config.Farm.MultiNeed.GapSeconds, 1, 120)
+        if config.Farm.PetOrder ~= "oldest" and config.Farm.PetOrder ~= "youngest" then config.Farm.PetOrder = "youngest" end
+        if not table.find({ "door", "teleport", "walk" }, config.Farm.SpotTravel) then config.Farm.SpotTravel = "teleport" end
         return config, warnings
     end
     return Config
@@ -1200,6 +1146,8 @@ __moduleSources["Core/Scheduler"] = function(...)
         table.insert(self._order, name)
     end
     function Scheduler:removeJob(name)
+        local job = self._jobs[name]
+        if job and job.thread then pcall(task.cancel, job.thread) end
         self._jobs[name] = nil
         for index, jobName in ipairs(self._order) do
             if jobName == name then
@@ -1212,24 +1160,20 @@ __moduleSources["Core/Scheduler"] = function(...)
         return self._jobs[name]
     end
     function Scheduler:_runJob(job, now)
+        if job.running then return end
+        job.running = true
+        job.startedAt = Util.now()
         job.nextRun = now + job.interval
-        local startedAt = Util.now()
-        local ok, err = pcall(job.callback, now)
-        local duration = Util.now() - startedAt
-        job.runs += 1
-        if duration > SLOW_JOB_SECONDS then
-            self._logger:warn("Scheduler", string.format("Job '%s' took %.2f s (blocks other jobs)", job.name, duration))
-        end
-        if ok then
-            job.failures = 0
-            return
-        end
-        job.failures += 1
-        self._logger:error("Scheduler", string.format("Job '%s' failed (%d in a row): %s", job.name, job.failures, tostring(err)))
-        if job.failures >= MAX_CONSECUTIVE_FAILURES then
-            job.enabled = false
-            self._logger:error("Scheduler", "Job '" .. job.name .. "' disabled after repeated failures")
-        end
+        job.thread = task.spawn(function()
+            local ok, err = pcall(job.callback, now)
+            job.running = false
+            job.runs += 1
+            job.nextRun = Util.now() + job.interval
+            if ok then job.failures = 0; return end
+            job.failures += 1
+            job.nextRun = Util.now() + math.min(60, math.max(1, job.interval) * 2 ^ math.min(job.failures, 5))
+            self._logger:error("Scheduler", string.format("Job '%s' failed (%d): %s; retry scheduled", job.name, job.failures, tostring(err)))
+        end)
     end
     function Scheduler:_tick()
         self.TickCount += 1
@@ -1239,7 +1183,13 @@ __moduleSources["Core/Scheduler"] = function(...)
                 return
             end
             local job = self._jobs[name]
-            if job and job.enabled and now >= job.nextRun then
+            if job and job.running and now - job.startedAt > 30 then
+                if job.thread then pcall(task.cancel, job.thread) end
+                job.running = false
+                job.nextRun = now + math.max(1, job.interval)
+                self._logger:warn("Scheduler", "Timed out job: " .. job.name)
+            end
+            if job and job.enabled and not job.running and now >= job.nextRun then
                 self:_runJob(job, now)
             end
         end
@@ -1281,6 +1231,10 @@ __moduleSources["Core/Scheduler"] = function(...)
         if thread and coroutine.running() ~= thread then
             pcall(task.cancel, thread)
         end
+        for _, job in pairs(self._jobs) do
+            if job.thread and job.thread ~= coroutine.running() then pcall(task.cancel, job.thread) end
+            job.running = false
+        end
         self._logger:info("Scheduler", "Stopped")
     end
     return Scheduler
@@ -1289,7 +1243,7 @@ __moduleSources["Services/Disclosure"] = function(...)
     local import = ...
     local Config = import("Core/Config")
     local Disclosure = {}
-    Disclosure.VERSION = "Private Local 1.3 (attached base 2.1.6)"
+    Disclosure.VERSION = "Local Stable 1.4 (attached base 2.1.6)"
     function Disclosure.isAllowedField(field) return false end
     function Disclosure.featureSummary(config)
         local on, total = Config.countFeatures(config)
@@ -1303,14 +1257,14 @@ __moduleSources["Services/Disclosure"] = function(...)
     end
     function Disclosure.buildStartLines(config, files, webhook, telemetry, launch)
         return {
-            "AdoptMe Private Local 1.3 | source from attached Adopt Victims base 2.1.6",
+            "AdoptMe Local Stable 1.4 | source from attached Adopt Victims base 2.1.6",
             "External HTTP: disabled (no request function, no game:HttpGet, no loadstring)",
             "External UI library: removed; Roblox-native local interface",
             "Remote notifications/telemetry/squad relay: disabled",
             "Local log and session files: disabled; GUI preferences are not persisted",
             "Farm still uses Adopt Me's own in-game remotes, when enabled",
             "Farm features on: " .. Disclosure.featureSummary(config),
-            "An explicitly configured numeric UserId is checked at startup; this is not encryption",
+            "No Owner/UserId configuration is required",
             "Risk: automation may breach Roblox / Adopt Me rules and cause sanctions",
         }
     end
@@ -2191,7 +2145,7 @@ __moduleSources["Services/Interface"] = function(...)
         assert(not api.Status().stopped, "O script foi encerrado")
         local gui = Instance.new("ScreenGui")
         scope.gui = gui
-        gui.Name = "AdoptMePrivateHub13"
+        gui.Name = "AdoptMeLocalStableHub14"
         gui.ResetOnSpawn = false
         gui.IgnoreGuiInset = true
         gui.DisplayOrder = 50
@@ -2314,13 +2268,9 @@ __moduleSources["Services/Interface"] = function(...)
             return node
         end
         local function put(path, value)
-            local node = api.Config
-            for i = 1, #path - 1 do
-                if type(node[path[i]]) ~= "table" then return false end
-                node = node[path[i]]
-            end
-            node[path[#path]] = value
-            return true
+            local ok, reason = api.SetSetting(path, value)
+            if not ok then notice(reason) end
+            return ok
         end
         local function refresh()
             if closed then return end
@@ -2441,6 +2391,22 @@ __moduleSources["Services/Interface"] = function(...)
             end))
             table.insert(refreshers, function() if not input:IsFocused() then setText(input, at(path) or "") end end)
         end
+        local function listField(page, title, path)
+            local frame = row(page, title, "IDs separados por vírgula; vazio limpa a lista.", 180)
+            local input = el("TextBox", {Text = table.concat(at(path) or {}, ", "), ClearTextOnFocus = false,
+                TextSize = 11, TextColor3 = C.text, BackgroundColor3 = C.bg, Size = UDim2.fromOffset(164, 30),
+                Position = UDim2.new(1, -176, 0.5, -15)}, frame)
+            round(input, 7)
+            connect(input.FocusLost, guard(function()
+                local values = {}
+                for token in string.gmatch(input.Text, "[^,]+") do
+                    local id = string.match(token, "^%s*(.-)%s*$")
+                    if id ~= "" and not table.find(values, id) then table.insert(values, id) end
+                end
+                put(path, values)
+            end))
+            table.insert(refreshers, function() if not input:IsFocused() then setText(input, table.concat(at(path) or {}, ", ")) end end)
+        end
         local function information(page, title, height)
             local frame = el("Frame", { BackgroundColor3 = C.card, Size = UDim2.new(1, 0, 0, height or 90) }, pages[page])
             round(frame, 9)
@@ -2454,7 +2420,7 @@ __moduleSources["Services/Interface"] = function(...)
         local overview = information("Inicio", "SESSÃO", 108)
         local currentNeeds = information("Inicio", "NECESSIDADES ATIVAS", 96)
         toggle("Inicio", "Farm em execução", "Pausar cancela as tarefas atuais.", {"Farm", "Enabled"})
-        action("Inicio", "Necessidades estáveis", "Dois pets + bebê em sequência. Inicia pausado.", function() return api.ApplyPreset("NeedsStable") end)
+        action("Inicio", "Necessidades estáveis", "Pets selecionados em sequência; bebê opcional. Inicia pausado.", function() return api.ApplyPreset("NeedsStable") end)
         heading("Farm", "EXECUÇÃO E RECUPERAÇÃO")
         toggle("Farm", "Farm em execução", "Inicia ou pausa a automação.", {"Farm", "Enabled"})
         toggle("Farm", "Manter pet equipado", "Mantém um pet disponível para as necessidades.", {"Farm", "KeepPetEquipped"})
@@ -2477,17 +2443,38 @@ __moduleSources["Services/Interface"] = function(...)
         field("Pets", "Pet / ovo focado", "Identificador do inventário; exemplo: cracked_egg.", {"Farm", "Focus"})
         field("Pets", "Ovo a comprar", "Use o identificador interno do ovo.", {"Farm", "EggToBuy"})
         toggle("Pets", "Dois pets / Pet Certificate", "Usa dois slots já autorizados pelo jogo.", {"Farm", "TwoPets"})
-        toggle("Pets", "Preservar dupla equipada", "Evita trocas automáticas dos dois pets escolhidos.", {"Farm", "KeepEquippedPair"})
-        action("Pets", "Reverificar dois pets", "Libera a espera de equipamento; não ativa ou compra certificado.", api.RetryDisabled)
+        toggle("Pets", "Preservar seleção manual", "Protege um ou dois pets, inclusive Full Grown.", {"Farm", "KeepEquippedPair"})
+        action("Pets", "Atualizar seleção", "Pause, equipe os pets e confirme a seleção atual.", api.RefreshSelection)
+        local selectionInfo = information("Pets", "SELEÇÃO PROTEGIDA", 95)
+        table.insert(refreshers, function()
+            local selection = api.Status().selection
+            selectionInfo.Text = selection and ("IDs: " .. table.concat(selection.ids or {}, ", ")
+                .. "\nDois slots observados: " .. tostring(selection.twoSlotsObserved)
+                .. " | proteção: " .. tostring(selection.enabled)) or "Aguardando dados do jogo"
+        end)
+        toggle("Pets", "Comprar comida", "Autoriza compras de comida quando não houver estoque.", {"Farm", "BuyFood"})
+        toggle("Pets", "Comprar água", "Autoriza compras de água quando não houver estoque.", {"Farm", "BuyWater"})
+        field("Pets", "Limite de compras", "Comida e água por sessão; zero sem limite.", {"Farm", "MaxBuysPerSession"}, 0, 1000)
+        field("Pets", "Limite de ovos", "Ovos por sessão; zero sem limite.", {"Farm", "MaxEggBuysPerSession"}, 0, 1000)
         toggle("Pets", "Comprar ovos", "Gasta Bucks quando a compra for necessária.", {"Farm", "BuyEgg"})
         toggle("Pets", "Usar poções", "Mantém o controle de intervalo em memória.", {"Farm", "AutoPotions", "Enabled"})
         toggle("Pets", "Criar Neon", "Pode consumir quatro pets elegíveis.", {"Farm", "AutoNeon", "Enabled"})
         toggle("Pets", "Criar Mega Neon", "Pode consumir quatro pets Neon elegíveis.", {"Farm", "AutoNeon", "Mega"})
         toggle("Pets", "Abrir presentes", "Pode consumir presentes do inventário.", {"Farm", "AutoOpen", "Enabled"})
         action("Pets", "Alternar ordem", "Mais novos ou mais velhos primeiro.", function()
-            api.Config.Farm.PetOrder = api.Config.Farm.PetOrder == "oldest" and "youngest" or "oldest"
+            put({"Farm", "PetOrder"}, api.Config.Farm.PetOrder == "oldest" and "youngest" or "oldest")
             return true, "Ordem: " .. api.Config.Farm.PetOrder
         end)
+        heading("Pets", "FILTROS")
+        listField("Pets", "Tipos de pet preferidos", {"Farm", "FarmPetKinds"})
+        listField("Pets", "Poções permitidas", {"Farm", "AutoPotions", "Potions"})
+        listField("Pets", "Poções ignoradas", {"Farm", "AutoPotions", "Skip"})
+        listField("Pets", "Tipos que recebem poções", {"Farm", "AutoPotions", "PetKinds"})
+        listField("Pets", "Tipos excluídos de fusões", {"Farm", "AutoNeon", "Exclude"})
+        listField("Pets", "Presentes excluídos", {"Farm", "AutoOpen", "Exclude"})
+        toggle("Pets", "Trocar Full Grown", "Somente com proteção manual desativada.", {"Farm", "SkipFullGrown"})
+        toggle("Pets", "Preferir Neon", "Ordem automática com proteção desativada.", {"Farm", "PreferNeon"})
+        field("Pets", "Intervalo de buffs", "Minutos mínimos por pet e tipo de poção.", {"Farm", "AutoPotions", "BuffMinutes"}, 0, 1440)
         heading("Pets", "PRESETS")
         local presets = {{"Off", "Tudo desligado"}, {"NeedsStable", "Necessidades estáveis"}, {"Balanced", "AutoFarm completo"}, {"Focus", "Focar no pet / ovo"},
             {"Speedrun", "Mega Mummy Spider"}, {"Skelicorn", "Mega Skelicorn"}, {"EventOnly", "Só evento"}}
@@ -2498,6 +2485,7 @@ __moduleSources["Services/Interface"] = function(...)
                 return api.ApplyPreset(key)
             end)
         end
+        listField("Needs", "Necessidades ignoradas", {"Farm", "AutoNeeds", "Skip"})
         heading("Event", "EVENTOS DISPONÍVEIS NO SCRIPT")
         toggle("Event", "Eventos habilitados", "Controle principal dos recursos de evento.", {"Farm", "Event", "Enabled"})
         for _, item in ipairs({{"GhostGallery","Ghost Gallery"},{"Hauntlet","Hauntlet"},{"Crypt","Crypt"},
@@ -2507,14 +2495,31 @@ __moduleSources["Services/Interface"] = function(...)
             toggle("Event", item[2], "Depende do evento e das regras atuais do jogo.", {"Farm", "Event", item[1]})
         end
         toggle("Event", "Comprar pets com Candy", "Pode gastar a moeda do evento.", {"Farm", "Event", "CandyPets", "Enabled"})
+        listField("Event", "Pets escolhidos na loja Candy", {"Farm", "Event", "CandyPets", "Pick"})
+        listField("Event", "Recompensas da Crypt", {"Farm", "Event", "CryptOpen"})
+        field("Event", "Reserva de Candy", "Saldo mínimo após compras opcionais.", {"Farm", "Event", "CandyPets", "KeepCandy"}, 0, 1000000000)
+        toggle("Event", "Compra em quantidade", "Aguarda confirmação do lote no inventário.", {"Farm", "Event", "CandyPets", "MaxBuy"})
+        toggle("Event", "Ninho automático", "Organiza gravetos e construção do ninho.", {"Farm", "Event", "AutoNest"})
+        toggle("Event", "Hauntlet primeiro", "Prioridade entre os dois minijogos.", {"Farm", "Event", "HauntletFirst"})
+        field("Event", "Slots do Pet Pen", "Configure a capacidade autorizada da conta.", {"Farm", "Event", "PetPenSlots"}, 1, 12)
         field("Event", "Intervalo do Pet Pen", "Minutos entre verificações (1–120).", {"Farm", "Event", "PetPenMinutes"}, 1, 120)
         action("Event", "Coletar Pet Pen", "Solicita a coleta quando o farm está ligado.", api.ClaimPetPen)
+        toggle("Settings", "Lembrar ajustes", "Somente na memória deste cliente; reinicia pausado.", {"Interface", "RememberSettings"})
         heading("Settings", "ESTABILIDADE")
         toggle("Settings", "Recuperar travamentos", "Recuperação existente quando há falhas repetidas.", {"Farm", "StuckRecovery", "Enabled"})
         field("Settings", "Tempo de recuperação", "Segundos sem progresso (60–600).", {"Farm", "StuckRecovery", "Seconds"}, 60, 600)
         field("Settings", "Espera após erro", "Base em segundos; aumenta em falhas seguidas.", {"Farm", "FailureCooldownSeconds"}, 5, 120)
         field("Settings", "Limite de falhas", "Número de falhas antes de descansar (1–10).", {"Farm", "MaxConsecutiveFailures"}, 1, 10)
         field("Settings", "Descanso de tarefas", "Minutos; zero desativa pelo resto da sessão.", {"Farm", "DisableMinutes"}, 0, 60)
+        toggle("Settings", "Aceitar menu inicial", "Fecha o menu Play quando o farm estiver ligado.", {"Farm", "AutoAcceptMenu"})
+        toggle("Settings", "Fechar diálogos", "Diálogos reconhecidos do jogo.", {"Farm", "AutoCloseDialogs"})
+        toggle("Settings", "Viagem pelo módulo do jogo", "InteriorsM quando disponível.", {"Farm", "GameTravel"})
+        toggle("Settings", "Voltar por respawn", "Retorno para casa; sujeito à confirmação de chegada.", {"Farm", "HomeByRespawn"})
+        toggle("Settings", "Sair pela porta da casa", "Usa a porta conhecida da própria casa.", {"Farm", "HouseDoorExit"})
+        toggle("Settings", "Viajar para tigela", "Autoriza voltar para casa para alimentar.", {"Farm", "FoodBowlTrip"})
+        toggle("Settings", "Reconectar automaticamente", "Reentra após falha prolongada, quando habilitado.", {"Farm", "AutoRejoin"})
+        toggle("Settings", "Ajustar câmera", "Afasta a câmera quando presa no personagem.", {"Farm", "CameraGuard"})
+        field("Settings", "Viagem para pontos", "teleport, door ou walk.", {"Farm", "SpotTravel"})
         action("Settings", "Reativar tarefas", "Libera tarefas em espera ou desativadas.", api.RetryDisabled)
         action("Settings", "Centralizar janela", "Reposiciona o HUB dentro da tela.", function()
             geometry.maximized, geometry.restore, geometry.minimized = false, nil, false
@@ -2523,7 +2528,7 @@ __moduleSources["Services/Interface"] = function(...)
         end)
         local diagnostic = information("Support", "ESTADO DO MOTOR", 250)
         local privacy = information("Support", "PRIVACIDADE", 108)
-        privacy.Text = "Sem telemetria, webhooks ou arquivos locais.\nO HUB usa somente instâncias Roblox.\nO loader faz o download do código do seu repositório."
+        privacy.Text = "Sem telemetria, webhooks ou arquivos locais.\nO HUB usa somente instâncias Roblox.\nArquivo consolidado; sem download de código externo."
         local reportBox
         action("Support", "Mostrar relatório local", "Texto em memória para você selecionar e copiar.", function()
             reportBox.Text = api.ProblemReport and api.ProblemReport() or "Relatório indisponível"
@@ -2652,7 +2657,10 @@ __moduleSources["Services/Interface"] = function(...)
     end
     function Interface.start(api, options)
         assert(type(api) == "table" and type(api.Config) == "table", "API do HUB indisponível")
+        if Interface._starting then return nil, "HUB já está abrindo" end
+        if Interface.current and Interface.current.Owner == api then return Interface.current end
         if Interface.current then Interface.current.Close() end
+        Interface._starting = true
         local scope = { connections = {} }
         function scope.cleanup()
             for _, connection in ipairs(scope.connections) do pcall(function() connection:Disconnect() end) end
@@ -2662,7 +2670,9 @@ __moduleSources["Services/Interface"] = function(...)
             if scope.gui then pcall(function() scope.gui:Destroy() end) end
         end
         local ok, result = pcall(build, api, scope)
+        Interface._starting = false
         if not ok then scope.cleanup(); error(result, 0) end
+        if api.Status().stopped then scope.cleanup(); return nil, "Script encerrado" end
         Interface.current = result
         return result
     end
@@ -3045,7 +3055,8 @@ __moduleSources["Game/GameData"] = function(...)
         local copy = {}
         seen[value] = copy
         for key, item in pairs(value) do
-            copy[deepCopy(key, depth + 1, seen)] = deepCopy(item, depth + 1, seen)
+            local copiedKey = deepCopy(key, depth + 1, seen)
+            if copiedKey ~= nil then copy[copiedKey] = deepCopy(item, depth + 1, seen) end
         end
         return copy
     end
@@ -3055,6 +3066,8 @@ __moduleSources["Game/GameData"] = function(...)
         self._logger = logger
         self._data = {}
         self._tracked = {}
+        self._revision, self._known, self._pendingPartials = {}, {}, {}
+        self._destroyed = false
         for _, key in pairs(GameConstants.DataKeys) do
             self._tracked[key] = true
         end
@@ -3073,6 +3086,8 @@ __moduleSources["Game/GameData"] = function(...)
             return
         end
         self._data[key] = deepCopy(value)
+        self._known[key] = true
+        self._revision[key] = (self._revision[key] or 0) + 1
         self._receivedAt = self._receivedAt or {}
         self._receivedAt[key] = Util.now()
         self.KeyChanged:Fire(key, self._data[key])
@@ -3090,9 +3105,14 @@ __moduleSources["Game/GameData"] = function(...)
             self:_setKey(rootKey, change.serialized_partial_value)
             return
         end
-        if type(self._data[rootKey]) ~= "table" then
-            self._data[rootKey] = {}
+        if not self._known[rootKey] then
+            self._pendingPartials[rootKey] = self._pendingPartials[rootKey] or {}
+            local pending = self._pendingPartials[rootKey]
+            if #pending < 256 then table.insert(pending, deepCopy(change)) end
+            self._revision[rootKey] = (self._revision[rootKey] or 0) + 1
+            return -- A delta cannot establish a complete inventory or needs snapshot.
         end
+        if type(self._data[rootKey]) ~= "table" then return end
         local node = self._data[rootKey]
         for index = 2, #path - 1 do
             local part = path[index]
@@ -3102,6 +3122,7 @@ __moduleSources["Game/GameData"] = function(...)
             node = node[part]
         end
         node[path[#path]] = deepCopy(change.serialized_partial_value)
+        self._revision[rootKey] = (self._revision[rootKey] or 0) + 1
         self._receivedAt = self._receivedAt or {}
         self._receivedAt[rootKey] = Util.now()
         self.KeyChanged:Fire(rootKey, self._data[rootKey])
@@ -3183,40 +3204,55 @@ __moduleSources["Game/GameData"] = function(...)
         else
             self._logger:warn("GameData", GameConstants.Remotes.DataPartiallyChanged .. " not found; nested updates will be missed")
         end
-        local snapshot, how = self:_loadSnapshot()
-        if snapshot then
-            self.SnapshotSource = how
-            for key in pairs(self._tracked) do
-                if snapshot[key] ~= nil and self._data[key] == nil then
-                    self:_setKey(key, snapshot[key])
-                end
-            end
-            self._logger:info("GameData", "Initial data loaded via " .. how)
-        else
-            self.SnapshotSource = nil
-            self._logger:warn("GameData", "No initial data (" .. tostring(how) .. "). Values appear as the game sends updates.")
-        end
+        self:refreshNeeds(true)
         return true
+    end
+    function GameData:revision(key)
+        return self._revision[key] or 0
+    end
+    function GameData:inventoryKnown(category)
+        local inventory = self:get(GameConstants.DataKeys.Inventory)
+        return self._known[GameConstants.DataKeys.Inventory] == true and type(inventory) == "table"
+            and type(inventory[category]) == "table"
+    end
+    function GameData:item(category, unique)
+        if unique == nil then return nil end
+        local inventory = self:get(GameConstants.DataKeys.Inventory)
+        local items = type(inventory) == "table" and inventory[category]
+        if type(items) ~= "table" then return nil end
+        unique = tostring(unique)
+        local direct = items[unique]
+        if type(direct) == "table" then return direct end
+        for key, item in pairs(items) do
+            if type(item) == "table" and tostring(item.unique or key) == unique then return item end
+        end
+        return nil
+    end
+    function GameData:hasPet(unique)
+        return self:item("pets", unique) ~= nil
+    end
+    function GameData:isPetProtected(unique)
+        return self.selection ~= nil and self.selection:isProtected(unique)
     end
     function GameData:getPetKind(petUnique)
         local equip = self._data[GameConstants.DataKeys.Equip]
         if type(equip) == "table" and type(equip.pets) == "table" then
             for _, pet in pairs(equip.pets) do
-                if type(pet) == "table" and pet.unique == petUnique then
-                    return pet.kind or pet.id
+                if type(pet) == "table" and tostring(pet.unique) == tostring(petUnique) then
+                    if pet.kind or pet.id then return pet.kind or pet.id end
                 end
             end
         end
         local wrappers = self._data[GameConstants.DataKeys.PetWrappers]
         if type(wrappers) == "table" then
             for _, wrapper in pairs(wrappers) do
-                if type(wrapper) == "table" and wrapper.pet_unique == petUnique then
-                    return wrapper.pet_id
+                if type(wrapper) == "table" and tostring(wrapper.pet_unique) == tostring(petUnique) then
+                    if wrapper.pet_id then return wrapper.pet_id end
                 end
             end
         end
         local inventory = self._data[GameConstants.DataKeys.Inventory]
-        local pet = type(inventory) == "table" and type(inventory.pets) == "table" and inventory.pets[petUnique]
+        local pet = self:item("pets", petUnique)
         if type(pet) == "table" then
             return pet.kind or pet.id
         end
@@ -3232,15 +3268,31 @@ __moduleSources["Game/GameData"] = function(...)
     end
     function GameData:refreshNeeds(force)
         local now = Util.now()
-        if not force and now < (self._nextNeedsRefresh or 0) then return false end
-        self._nextNeedsRefresh = now + 3
-        local ok, snapshot = pcall(self._loadSnapshot, self)
-        if not ok or type(snapshot) ~= "table" then return false end
-        for _, key in ipairs({ GameConstants.DataKeys.Ailments, GameConstants.DataKeys.Equip,
-            GameConstants.DataKeys.Team, GameConstants.DataKeys.CharWrapper }) do
-            local fresh = self._receivedAt and now - (self._receivedAt[key] or -math.huge) < 6
-            if snapshot[key] ~= nil and (force or not fresh or self._data[key] == nil) then self:_setKey(key, snapshot[key]) end
+        if self._refreshing and now - (self._refreshStarted or now) > 8 then
+            if self._refreshThread then pcall(task.cancel, self._refreshThread) end
+            self._refreshing = false
         end
+        if self._destroyed or self._refreshing or (not force and now < (self._nextNeedsRefresh or 0)) then return false end
+        self._nextNeedsRefresh = now + 3
+        self._refreshing, self._refreshStarted = true, now
+        local versions = table.clone(self._revision)
+        self._refreshThread = task.spawn(function()
+            local ok, snapshot, how = pcall(self._loadSnapshot, self)
+            if not self._destroyed and ok and type(snapshot) == "table" then
+                self.SnapshotSource = how
+                for key in pairs(self._tracked) do
+                    -- Events received while require/get_data yielded win over this snapshot.
+                    if snapshot[key] ~= nil and self:revision(key) == (versions[key] or 0) then
+                        local pending = self._pendingPartials[key]
+                        self._pendingPartials[key] = nil
+                        self:_setKey(key, snapshot[key])
+                        -- Older deltas must not be replayed over an authoritative newer snapshot.
+                        if pending then table.clear(pending) end
+                    end
+                end
+            end
+            self._refreshing = false
+        end)
         return true
     end
     function GameData:findItems(category, ids)
@@ -3257,12 +3309,15 @@ __moduleSources["Game/GameData"] = function(...)
         for unique, item in pairs(items) do
             if type(item) == "table" and item.id ~= nil and (ids == nil or rank[item.id]) then
                 local properties = type(item.properties) == "table" and item.properties or {}
-                table.insert(result, { unique = tostring(item.unique or unique), id = item.id, usesLeft = tonumber(properties.uses_left) })
+                local uses = tonumber(properties.uses_left)
+                if uses == nil or uses > 0 then
+                    table.insert(result, { unique = tostring(item.unique or unique), id = item.id, usesLeft = uses })
+                end
             end
         end
         table.sort(result, function(a, b)
             if rank[a.id] ~= rank[b.id] then
-                return rank[a.id] < rank[b.id]
+                return (rank[a.id] or math.huge) < (rank[b.id] or math.huge)
             end
             return a.unique < b.unique
         end)
@@ -3270,7 +3325,7 @@ __moduleSources["Game/GameData"] = function(...)
     end
     function GameData:itemUsesLeft(category, unique)
         local inventory = self._data[GameConstants.DataKeys.Inventory]
-        local item = type(inventory) == "table" and type(inventory[category]) == "table" and inventory[category][unique]
+        local item = self:item(category, unique)
         if type(item) ~= "table" then
             return nil
         end
@@ -3292,13 +3347,13 @@ __moduleSources["Game/GameData"] = function(...)
         local equip = self._data[GameConstants.DataKeys.Equip]
         local result, seen = {}, {}
         for _, pet in pairs(type(equip) == "table" and type(equip.pets) == "table" and equip.pets or {}) do
-            local unique = type(pet) == "table" and pet.unique or (type(pet) == "string" and pet or nil)
+            local unique = type(pet) == "table" and pet.unique or ((type(pet) == "string" or type(pet) == "number") and pet or nil)
             if unique ~= nil then
                 unique = tostring(unique)
                 if unique ~= "" and not seen[unique] then
                     seen[unique] = true
                     local properties = type(pet) == "table" and type(pet.properties) == "table" and pet.properties or {}
-                    table.insert(result, { unique = unique, age = tonumber(properties.age) or self:petAge(unique) })
+                    table.insert(result, { unique = unique, age = self:petAge(unique) or tonumber(properties.age) })
                 end
             end
         end
@@ -3308,7 +3363,7 @@ __moduleSources["Game/GameData"] = function(...)
     function GameData:petAge(unique)
         local inventory = self._data[GameConstants.DataKeys.Inventory]
         local pets = type(inventory) == "table" and inventory.pets
-        local pet = type(pets) == "table" and pets[unique]
+        local pet = self:item("pets", unique)
         local properties = type(pet) == "table" and type(pet.properties) == "table" and pet.properties
         return properties and tonumber(properties.age) or nil
     end
@@ -3318,7 +3373,7 @@ __moduleSources["Game/GameData"] = function(...)
     function GameData:petBuffUntil(unique, word)
         local inventory = self._data[GameConstants.DataKeys.Inventory]
         local pets = type(inventory) == "table" and inventory.pets
-        local pet = type(pets) == "table" and pets[unique]
+        local pet = self:item("pets", unique)
         local now = os.time()
         local best
         local function walk(t, path, depth)
@@ -3348,7 +3403,7 @@ __moduleSources["Game/GameData"] = function(...)
     function GameData:isPetNeon(unique)
         local inventory = self._data[GameConstants.DataKeys.Inventory]
         local pets = type(inventory) == "table" and inventory.pets
-        local pet = type(pets) == "table" and pets[unique]
+        local pet = self:item("pets", unique)
         return type(pet) == "table" and GameConstants.isNeonPet(pet.properties)
     end
     -- copies of one kind that still grow: in the backpack and in the Pet Pen (Mega a Pet keeps slots + 1 of them)
@@ -3422,6 +3477,7 @@ __moduleSources["Game/GameData"] = function(...)
                     fits = not GameConstants.isNeonPet(pet.properties)
                 end
                 if age == GameConstants.FullGrownAge and fits and not inPen[unique]
+                    and not self:isPetProtected(unique) and not self:isPetEquipped(unique)
                     and not (exclude and exclude[kind]) and not GameConstants.NotFarmablePets[kind] then
                     groups[kind] = groups[kind] or {}
                     table.insert(groups[kind], unique)
@@ -3460,12 +3516,12 @@ __moduleSources["Game/GameData"] = function(...)
     function GameData:isPetMega(unique)
         local inventory = self._data[GameConstants.DataKeys.Inventory]
         local pets = type(inventory) == "table" and inventory.pets
-        local pet = type(pets) == "table" and pets[unique]
+        local pet = self:item("pets", unique)
         return type(pet) == "table" and type(pet.properties) == "table" and pet.properties.mega_neon == true
     end
     function GameData:petInventoryKnown()
         local inventory = self._data[GameConstants.DataKeys.Inventory]
-        return type(inventory) == "table" and type(inventory.pets) == "table"
+        return self:inventoryKnown("pets")
     end
     function GameData:petUniquesOfKind(kind)
         local inventory = self._data[GameConstants.DataKeys.Inventory]
@@ -3490,6 +3546,8 @@ __moduleSources["Game/GameData"] = function(...)
         return type(manager) == "table" and manager.is_sitting == true
     end
     function GameData:destroy()
+        self._destroyed = true
+        if self._refreshThread then pcall(task.cancel, self._refreshThread) end
         self.KeyChanged:DisconnectAll()
     end
     return GameData
@@ -3698,13 +3756,14 @@ __moduleSources["Game/PetLocator"] = function(...)
             return nil
         end
         for _, wrapper in pairs(wrappers) do
-            if type(wrapper) == "table" and tostring(wrapper.pet_unique) == tostring(petUnique) and type(wrapper.char) == "string" then
-                return wrapper.char
+            if type(wrapper) == "table" and tostring(wrapper.pet_unique) == tostring(petUnique) and (type(wrapper.char) == "string" or type(wrapper.char) == "number") then
+                return tostring(wrapper.char)
             end
         end
         return nil
     end
     function PetLocator:findModel(petUnique)
+        if not self._gameData:isPetEquipped(petUnique) then return nil, "pet is not equipped" end
         local wrappers = self._gameData:get(GameConstants.DataKeys.PetWrappers)
         for _, wrapper in pairs(type(wrappers) == "table" and wrappers or {}) do
             if type(wrapper) == "table" and tostring(wrapper.pet_unique) == tostring(petUnique)
@@ -3724,7 +3783,7 @@ __moduleSources["Game/PetLocator"] = function(...)
             local ok, value = pcall(function()
                 return model:GetAttribute(GameConstants.PetModelIdAttribute)
             end)
-            if ok and value ~= nil and tostring(value) == tostring(streamingId) then
+            if ok and model:IsA("Model") and value ~= nil and tostring(value) == tostring(streamingId) then
                 return model
             end
         end
@@ -3783,7 +3842,9 @@ __moduleSources["Game/PlayerSync"] = function(...)
                 end
                 return
             end
-            if key == KEYS.Money and tonumber(value) then
+            if key == KEYS.Inventory then
+                state:set("pets.equipped", petLocator:getEquippedPets(), "DataChanged:" .. key)
+            elseif key == KEYS.Money and tonumber(value) then
                 state:set("player.bucks", tonumber(value), "DataChanged:" .. key)
             elseif key == KEYS.Team and type(value) == "string" then
                 state:set("player.team", value, "DataChanged:" .. key)
@@ -3800,6 +3861,8 @@ __moduleSources["Game/PlayerSync"] = function(...)
                     furnitureLoggedFor = name
                     logger:debug("Furniture", "In " .. name .. ": " .. describeFurniture(value))
                 end
+            elseif key == KEYS.Interior then
+                state:set("player.interior", nil, "DataChanged:" .. key)
             elseif key == KEYS.Equip then
                 state:set("pets.equipped", petLocator:getEquippedPets(), "DataChanged:" .. key)
             end
@@ -3904,11 +3967,20 @@ __moduleSources["Game/AilmentTracker"] = function(...)
         return list
     end
     function AilmentTracker:_onAilmentsChanged(manager)
-        if type(manager) ~= "table" then
+        if type(manager) ~= "table" or (type(manager.ailments) ~= "table" and type(manager.baby_ailments) ~= "table") then
             self._state:set("ailments.known", false, SOURCE_DATA)
+            self._state:set("ailments.petKnown", false, SOURCE_DATA)
+            self._state:set("ailments.babyKnown", false, SOURCE_DATA)
             return -- A missing snapshot must not erase pending needs as if they had completed.
         end
+        self._state:set("ailments.petKnown", type(manager.ailments) == "table", SOURCE_DATA)
+        self._state:set("ailments.babyKnown", type(manager.baby_ailments) == "table", SOURCE_DATA)
+        self._state:set("ailments.revision", self._gameData:revision(GameConstants.DataKeys.Ailments), SOURCE_DATA)
         local list = self:parse(manager)
+        for _, old in pairs(self._previous) do
+            if (old.owner == "pet" and type(manager.ailments) ~= "table")
+                or (old.owner == "baby" and type(manager.baby_ailments) ~= "table") then table.insert(list, old) end
+        end
         local current = {}
         for _, entry in ipairs(list) do
             local id = entryId(entry)
@@ -3949,8 +4021,9 @@ __moduleSources["Game/AilmentTracker"] = function(...)
         return false
     end
     function AilmentTracker:_onCompleted(owner, petUnique, kind, rewards)
-        local bucks = type(rewards) == "table" and tonumber(rewards.bucks) or 0
-        local xp = type(rewards) == "table" and tonumber(rewards.xp) or nil
+        if type(kind) ~= "string" or kind == "" then return end
+        local bucks = math.max(0, finiteNumber(type(rewards) == "table" and rewards.bucks, 0))
+        local xp = finiteNumber(type(rewards) == "table" and rewards.xp, nil)
         local label = owner == "baby" and "baby" or ("pet " .. tostring(self._gameData:getPetKind(petUnique) or "?"))
         local source = owner == "baby" and GameConstants.Remotes.BabyAilmentCompleted or GameConstants.Remotes.PetAilmentCompleted
         local completed = self._state:increment("stats.needsCompleted", 1, source)
@@ -4020,6 +4093,13 @@ __moduleSources["Game/Interaction"] = function(...)
         self._logger = logger
         self._state = state
         self._sent = 0
+        local environment = Util.getSharedEnvironment()
+        local me = game:GetService("Players").LocalPlayer
+        local key = tostring(game.PlaceId) .. ":" .. tostring(me and me.UserId)
+        environment.AdoptMeLocalOperations = environment.AdoptMeLocalOperations or {}
+        environment.AdoptMeLocalOperations[key] = environment.AdoptMeLocalOperations[key] or { pending = {}, purchases = {} }
+        self._operations = environment.AdoptMeLocalOperations[key]
+        self._operations.consumptions = self._operations.consumptions or {}
         return self
     end
     function Interaction.describeActions()
@@ -4051,7 +4131,7 @@ __moduleSources["Game/Interaction"] = function(...)
         end)
     end
     Interaction.CLICK_METHODS = { "firesignal", "connections", "touch", "mouse" }
-    local CLICK_SIGNALS = { "Activated", "MouseButton1Click", "MouseButton1Down", "MouseButton1Up" }
+    local CLICK_SIGNALS = { "Activated", "MouseButton1Click" }
     local function buttonCentre(button)
         local screenGui = button:FindFirstAncestorOfClass("ScreenGui")
         local inset = (screenGui and screenGui.IgnoreGuiInset) and Vector2.new(0, 0)
@@ -4066,6 +4146,7 @@ __moduleSources["Game/Interaction"] = function(...)
             end
             local fired = 0
             for _, signalName in ipairs(CLICK_SIGNALS) do
+                if fired > 0 then break end
                 pcall(function()
                     for _, connection in ipairs(getconnections(button[signalName])) do
                         if pcall(function() connection:Fire() end) or pcall(connection.Function) then
@@ -4079,10 +4160,8 @@ __moduleSources["Game/Interaction"] = function(...)
             if type(firesignal) ~= "function" then
                 return false, "firesignal missing"
             end
-            for _, signalName in ipairs(CLICK_SIGNALS) do
-                pcall(firesignal, button[signalName])
-            end
-            return true, ""
+            local ok, reason = pcall(firesignal, button.Activated)
+            return ok, ok and "activation sent; awaiting UI change" or tostring(reason)
         end
         local ok, err = pcall(function()
             local vim = game:GetService("VirtualInputManager")
@@ -4441,15 +4520,21 @@ __moduleSources["Game/Interaction"] = function(...)
         if not interior or watchedInteriors[interior] then
             return
         end
-        local connected = pcall(function()
-            interior.DescendantAdded:Connect(function(node)
+        local connected, connection = pcall(function()
+            return interior.DescendantAdded:Connect(function(node)
                 if isCircleGroup(node) then
                     circleOrder += 1
                     circleAddedAt[node], circleSeenAt[node] = circleOrder, os.clock()
                 end
             end)
         end)
-        watchedInteriors[interior] = connected or nil -- not connected: tried again next time
+        watchedInteriors[interior] = connected and connection or nil
+    end
+    function Interaction.disconnectHauntletWatches()
+        for interior, connection in pairs(watchedInteriors) do
+            pcall(function() connection:Disconnect() end)
+            watchedInteriors[interior] = nil
+        end
     end
     local function hauntletInterior(interiorName)
         local interiors = workspace:FindFirstChild("Interiors")
@@ -5219,7 +5304,37 @@ __moduleSources["Game/Interaction"] = function(...)
         end
         return table.concat(parts, ", ")
     end
+    function Interaction:bindData(data, farmConfig)
+        self._gameData, self._farmConfig = data, farmConfig
+    end
+    function Interaction:hasPending()
+        return next(self._operations.pending) ~= nil
+    end
+    function Interaction:_preparePurchase(category, id, options)
+        local data, farm = self._gameData, self._farmConfig
+        if not data or not data:inventoryKnown(category) then return false, "purchase waits for complete inventory" end
+        if category == "food" and id == "water" and not farm.BuyWater then return false, "water purchases disabled" end
+        if category == "food" and id == "hotdog" and not farm.BuyFood then return false, "food purchases disabled" end
+        local count = type(options) == "table" and options.buy_count or 1
+        if type(count) ~= "number" or count ~= count or count < 1 or count % 1 ~= 0 or count > 1000 then
+            return false, "invalid purchase quantity (1..1000)"
+        end
+        local key = tostring(category) .. "|" .. tostring(id)
+        local have = #data:itemsOfId(category, id)
+        local previous = self._operations.purchases[key]
+        if previous and have < previous.before + previous.count then
+            return false, "previous purchase unconfirmed; no duplicate purchase sent"
+        end
+        local record = { before = have, count = count, key = key }
+        self._operations.purchases[key] = record
+        return true, record
+    end
+    function Interaction:destroy()
+        self._destroyed = true
+        if Interaction.disconnectHauntletWatches then Interaction.disconnectHauntletWatches() end
+    end
     function Interaction:send(actionName, ...)
+        if self._destroyed then return false, "interaction stopped" end
         local action = GameConstants.Actions[actionName]
         if not action then
             error("Interaction: action is not in the allowlist: " .. tostring(actionName), 2)
@@ -5310,34 +5425,54 @@ __moduleSources["Game/Interaction"] = function(...)
             self._logger:error("Action", "Remote not found: " .. action.remote)
             return false, "remote not found"
         end
+        if self._operations.pending[actionName] then return false, "previous " .. actionName .. " request still pending" end
+        if not (remote:IsA("RemoteFunction") or remote:IsA("RemoteEvent")) then return false, "not a remote" end
+        local consumedUnique
+        local args = table.pack(...)
+        if actionName == "OpenGift" then consumedUnique = args[1]
+        elseif actionName == "OpenChest" then consumedUnique = args[2]
+        elseif actionName == "CreatePetObject" and type(args[2]) == "table" and self._gameData then
+            local item = self._gameData:item(GameConstants.ItemCategory, args[2].unique_id)
+            if item and GameConstants.isFarmPotion and GameConstants.isFarmPotion(item.id) then consumedUnique = args[2].unique_id end
+        end
+        if consumedUnique then
+            consumedUnique = tostring(consumedUnique)
+            if self._operations.consumptions[consumedUnique] then return false, "previous consumable request unconfirmed; item will not be sent twice" end
+            self._operations.consumptions[consumedUnique] = true
+        end
+        local purchase
+        if actionName == "BuyItem" then
+            local allowed, record = self:_preparePurchase(...)
+            if not allowed then return false, record end
+            purchase = record
+        end
         self._sent += 1
         self._state:set("farm.actionsSent", self._sent, "Interaction")
         self._logger:debug("Action", "Send " .. action.remote .. "(" .. describeArgs(...) .. ")")
         if remote:IsA("RemoteFunction") then
-            local finished, callOk, result = false, false, nil
+            local record = { finished = false }
+            self._operations.pending[actionName] = record
             local args = table.pack(...)
-            task.spawn(function()
-                callOk, result = pcall(function()
+            record.thread = task.spawn(function()
+                record.ok, record.result = pcall(function()
                     return remote:InvokeServer(table.unpack(args, 1, args.n))
                 end)
-                finished = true
+                record.finished = true
+                if self._operations.pending[actionName] == record then self._operations.pending[actionName] = nil end
+                if record.ok and record.result == false then
+                    if purchase then self._operations.purchases[purchase.key] = nil end
+                    if consumedUnique then self._operations.consumptions[consumedUnique] = nil end
+                end
             end)
             local deadline = Util.now() + (action.answersWhenDone and 2 or INVOKE_TIMEOUT_SECONDS)
-            while not finished and Util.now() < deadline do
-                task.wait(0.1)
+            while not record.finished and Util.now() < deadline do task.wait(0.1) end
+            if not record.finished then
+                if action.answersWhenDone then return true, "pending; completion requires replicated evidence" end
+                return false, "server reply pending; request will not be duplicated"
             end
-            if not finished and action.answersWhenDone then
-                return true, "pending"
-            end
-            if not finished then
-                self._logger:warn("Action", action.remote .. " did not answer within " .. INVOKE_TIMEOUT_SECONDS .. " s")
-                return false, "no answer from server"
-            end
-            if not callOk then
-                self._logger:warn("Action", action.remote .. " failed: " .. tostring(result))
-                return false, tostring(result)
-            end
-            return true, result
+            if not record.ok then return false, tostring(record.result) end
+            if record.result == false then return false, "server rejected the request" end
+            return true, record.result
         end
         if remote:IsA("RemoteEvent") then
             local ok, err = pcall(function(...)
@@ -5457,7 +5592,7 @@ __moduleSources["Game/Travel"] = function(...)
         local deadline = Util.now() + seconds
         while Util.now() < deadline do
             local p = rootPosition()
-            if not p or GameConstants.isOnMainMapArea(p) then
+            if p and self:isAt("MainMap") and GameConstants.isOnMainMapArea(p) then
                 return true
             end
             task.wait(0.25)
@@ -5478,15 +5613,15 @@ __moduleSources["Game/Travel"] = function(...)
         end
         p = rootPosition()
         if not p then
-            return true -- no character right now (respawning): the next step looks again
+            return false, "character unavailable after travel"
         end
         return false, string.format("not placed on MainMap (character at %.0f, %.0f)", p.X, p.Z)
     end
     local INTERIORS_PATH = { "ClientModules", "Core", "InteriorsM", "InteriorsM" }
     function Travel:_interiorsModule()
-        if self._interiorsM ~= nil then
-            return self._interiorsM or nil
-        end
+        if self._interiorsM then return self._interiorsM end
+        if Util.now() < (self._moduleRetryAt or 0) then return nil end
+        self._moduleRetryAt = Util.now() + 15
         local node = game:GetService("ReplicatedStorage")
         for _, name in ipairs(INTERIORS_PATH) do
             node = node and node:FindFirstChild(name)
@@ -5510,18 +5645,16 @@ __moduleSources["Game/Travel"] = function(...)
     function Travel:_waitArrival(destination, seconds)
         local deadline = Util.now() + seconds
         while Util.now() < deadline do
-            if self:isAt(destination) then
-                local character = Players.LocalPlayer.Character
-                local root = character and character:FindFirstChild("HumanoidRootPart")
-                local settle = Util.now() + 5
-                while root and root.Anchored and Util.now() < settle do
-                    task.wait(0.25)
-                end
-                return true
-            end
+            local character = Players.LocalPlayer.Character
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            if self:isAt(destination) and root and root.Parent and not root.Anchored then return true end
             task.wait(0.25)
         end
         return false
+    end
+    function Travel:cancelPending()
+        if self._enterThread then pcall(task.cancel, self._enterThread); self._enterThread = nil end
+        self._viaMainMap = nil
     end
     function Travel:_gameTravel(destination, recipe)
         local me = Players.LocalPlayer
@@ -5542,7 +5675,7 @@ __moduleSources["Game/Travel"] = function(...)
                 self._logger:info("Travel", "Respawn missed twice in a row: going home by door for 15 min")
             end
             self._logger:info("Travel", "Respawn did not bring me home: using the game's door instead")
-            if self:isAt(destination) then
+            if self:isAt(destination) and self:_waitArrival(destination, 2) then
                 return true
             end
         end
@@ -5557,13 +5690,15 @@ __moduleSources["Game/Travel"] = function(...)
         local doorId = gameDoorId(recipe)
         self._logger:info("Travel", "Going to " .. destination .. " (now in " .. tostring(before) .. ", game travel via "
             .. doorId .. ")")
-        task.spawn(function()
+        self:cancelPending()
+        self._enterThread = task.spawn(function()
             local ok, err = pcall(module.enter, destination, doorId, options)
             if not ok then
                 self._logger:warn("Travel", "InteriorsM.enter failed: " .. tostring(err))
             end
         end)
         if not self:_waitArrival(destination, ARRIVAL_TIMEOUT_SECONDS + 5) then
+            self:cancelPending()
             return false, "still in " .. tostring(self._state:get("player.interior"))
         end
         self._logger:info("Travel", "Arrived: " .. tostring(self._state:get("player.interior")))
@@ -5578,12 +5713,17 @@ __moduleSources["Game/Travel"] = function(...)
             return false, "no InteriorsM"
         end
         self._logger:info("Travel", "Visiting the house of " .. tostring(player.Name) .. " (quest)")
-        task.spawn(function()
+        self:cancelPending()
+        self._enterThread = task.spawn(function()
             local ok, err = pcall(module.enter, "housing", "MainDoor", { house_owner = player })
             if not ok then
                 self._logger:warn("Travel", "InteriorsM.enter (house visit) failed: " .. tostring(err))
             end
         end)
+        if not self:_waitArrival("housing", ARRIVAL_TIMEOUT_SECONDS + 5) then
+            self:cancelPending()
+            return false, "house visit arrival unconfirmed"
+        end
         return true
     end
     function Travel:goTo(destination)
@@ -5591,7 +5731,7 @@ __moduleSources["Game/Travel"] = function(...)
         if not recipe then
             return false, "no known route to " .. tostring(destination)
         end
-        if self:isAt(destination) then
+        if self:isAt(destination) and self:_waitArrival(destination, 2) then
             self._logger:debug("Travel", "Already at " .. destination)
             return true
         end
@@ -5612,7 +5752,7 @@ __moduleSources["Game/Travel"] = function(...)
                 self._gameTravelFails = 0
                 return true
             end
-            if self:isAt(destination) then
+            if self:isAt(destination) and self:_waitArrival(destination, 2) then
                 return true
             end
             self._gameTravelFails = (self._gameTravelFails or 0) + 1
@@ -5627,7 +5767,7 @@ __moduleSources["Game/Travel"] = function(...)
             local module = self:_interiorsModule()
             if module then
                 self._logger:info("Travel", "Leaving the Crypt first (its door to the main map)")
-                task.spawn(pcall, module.enter, "MainMap", "TheCrypt/MainDoor", {})
+                self._enterThread = task.spawn(pcall, module.enter, "MainMap", "TheCrypt/MainDoor", {})
                 local deadline = Util.now() + 15
                 while Util.now() < deadline and not self:isAt("MainMap") do
                     task.wait(0.25)
@@ -5661,7 +5801,7 @@ __moduleSources["Game/Travel"] = function(...)
         local resubscribed = false
         while Util.now() < deadline do
             local now = self._state:get("player.interior")
-            if now ~= nil and now ~= before then
+            if self:isAt(destination) and self:_waitArrival(destination, 2) then
                 self._logger:info("Travel", "Arrived: " .. tostring(now))
                 if destination == "MainMap" then
                     return self:_checkPlacedOnMainMap(recipe, me)
@@ -5707,8 +5847,9 @@ __moduleSources["Game/Furniture"] = function(...)
     function Furniture:_keysOfKinds(kinds)
         local wanted = {}
         for _, kind in ipairs(kinds) do
-            wanted[kind] = true
+            wanted[kind] = #kinds + 1
         end
+        for index, kind in ipairs(kinds) do wanted[kind] = index end
         local interior = self._gameData:get(GameConstants.DataKeys.Interior)
         local keys = {}
         if type(interior) ~= "table" or type(interior.furniture) ~= "table" then
@@ -5720,6 +5861,7 @@ __moduleSources["Game/Furniture"] = function(...)
             end
         end
         table.sort(keys, function(a, b)
+            if wanted[a.kind] ~= wanted[b.kind] then return wanted[a.kind] < wanted[b.kind] end
             return a.key < b.key
         end)
         return keys
@@ -5738,7 +5880,7 @@ __moduleSources["Game/Furniture"] = function(...)
             local name = holder.Name
             if string.sub(name, 1, #myPrefix) == myPrefix and string.sub(name, -#suffix) == suffix then
                 for _, child in ipairs(holder:GetChildren()) do
-                    if child:IsA("Model") and child:GetAttribute(GameConstants.FurnitureUniqueAttribute) == key then
+                    if child:IsA("Model") and tostring(child:GetAttribute(GameConstants.FurnitureUniqueAttribute)) == tostring(key) then
                         return child
                     end
                 end
@@ -5762,7 +5904,7 @@ __moduleSources["Game/Furniture"] = function(...)
             local useName = GameConstants.UseBlockForFurniture[candidate.kind]
             local useBlocks = model and model:FindFirstChild("UseBlocks")
             local usePart = useBlocks and useName and useBlocks:FindFirstChild(useName)
-            if usePart then
+            if usePart and usePart:IsA("BasePart") and not ((usePart:IsA("Seat") or usePart:IsA("VehicleSeat")) and usePart.Occupant) then
                 return {
                     key = candidate.key,
                     kind = candidate.kind,
@@ -5776,42 +5918,56 @@ __moduleSources["Game/Furniture"] = function(...)
     return Furniture
 end
 __moduleSources["Game/NeedSession"] = function(...)
-    -- Track each original participant separately; equipment loss is never success.
     local NeedSession = {}
     NeedSession.__index = NeedSession
     function NeedSession.key(entry)
         return tostring(entry.kind) .. "|" .. tostring(entry.owner) .. "|" .. tostring(entry.petUnique)
     end
     function NeedSession.new(entries, startedAt)
-        local self = setmetatable({ entries = {}, byKey = {}, missingAt = {}, startedAt = startedAt, resolved = {} }, NeedSession)
+        local self = setmetatable({ entries = {}, byKey = {}, missingAt = {}, startedAt = startedAt,
+            resolved = {}, progress = {}, revisions = {}, states = {}, episodeChanged = {} }, NeedSession)
         for _, original in ipairs(entries or {}) do
             local entry = table.clone(original)
             local key = NeedSession.key(entry)
             if not self.byKey[key] then
                 self.byKey[key] = entry
+                self.states[key] = "pending"
+                self.progress[key] = (entry.progress or 0) > 0
                 table.insert(self.entries, entry)
             end
         end
         return self
     end
-    function NeedSession:observe(entry, current, completedAt, known, eligible, now)
+    function NeedSession:setPhase(entry, phase)
+        local key = NeedSession.key(entry)
+        if not self.resolved[key] then self.states[key] = phase end
+    end
+    function NeedSession:observe(entry, current, completedAt, known, eligible, now, revision)
         local key = NeedSession.key(entry)
         if self.resolved[key] then return true, self.resolved[key] end
         if completedAt and completedAt >= self.startedAt then
-            self.resolved[key] = "completion event"
+            self.resolved[key], self.states[key] = "completion event", "completed"
             return true, self.resolved[key]
         end
         if known ~= true or eligible ~= true then
-            self.missingAt[key] = nil
+            self.missingAt[key], self.revisions[key] = nil, nil
             return false, known ~= true and "waiting for need data" or "participant unavailable"
         end
         if current then
-            self.missingAt[key] = nil
+            self.missingAt[key], self.revisions[key] = nil, nil
+            if entry.createdAt and current.createdAt and entry.createdAt ~= current.createdAt then
+                self.episodeChanged[key] = true
+                return false, "need episode changed without a completion event"
+            end
+            self.progress[key] = self.progress[key] or (current.progress or 0) > (entry.progress or 0)
             return false, current.inProgress and "in progress" or "waiting to start"
         end
-        self.missingAt[key] = self.missingAt[key] or now
-        if now - self.missingAt[key] >= 2 then
-            self.resolved[key] = "stable data removal"
+        -- One cached empty list, rate > 0, travel or equipment loss is not completion.
+        if self.episodeChanged[key] or not self.progress[key] or revision == nil then return false, "no completion evidence" end
+        if not self.missingAt[key] then
+            self.missingAt[key], self.revisions[key] = now, revision
+        elseif now - self.missingAt[key] >= 2 and revision ~= self.revisions[key] then
+            self.resolved[key], self.states[key] = "progress followed by replicated removal", "completed"
             return true, self.resolved[key]
         end
         return false, "verifying removal"
@@ -5827,7 +5983,6 @@ __moduleSources["Game/NeedSession"] = function(...)
     end
     return NeedSession
 end
-
 __moduleSources["Game/Tasks"] = function(...)
     local import = ...
     local Maid = import("Core/Maid")
@@ -5973,7 +6128,11 @@ __moduleSources["Game/Tasks"] = function(...)
         if not unique then
             return false, "no pet known"
         end
-        if ctx.gameData and ctx.gameData:isPetEquipped(unique) and ctx.petLocator:findModel(unique) then return true end
+        if ctx.gameData and ctx.gameData:isPetEquipped(unique) then
+            local ready = ctx.waitUntil(function() return ctx.petLocator:findModel(unique) ~= nil end, 10)
+            if ready then return true end
+            return false, "equipped pet model has not streamed in"
+        end
         if not waitForCharacter(ctx, 10) then
             return false, "no character"
         end
@@ -6224,6 +6383,15 @@ __moduleSources["Game/Tasks"] = function(...)
         end,
         timeoutSeconds = 110,
         run = function(ctx, group)
+            local active = group.entries[1]
+            if active and active.inProgress then
+                local seconds = math.min(95, (active.rate or 0) > 0 and (1 - (active.progress or 0)) / active.rate + 10 or 20)
+                ctx.waitUntil(function()
+                    local current = ctx.findEntry(active.kind, active.owner, active.petUnique)
+                    return ctx.isResolved(active) or (current and not current.inProgress)
+                end, seconds)
+                if ctx.isResolved(active) then return true end
+            end
             local kinds = GameConstants.FurnitureForAilment[group.kind]
             if group.entries[1] and group.entries[1].owner == "baby" then
                 local compatible = {}
@@ -6295,6 +6463,11 @@ __moduleSources["Game/Tasks"] = function(...)
                                 return false, offReason
                             end
                         end
+                        ctx.maid:Give(function()
+                            if entry.owner == "baby" then ctx.interaction:send("ExitSeatStates")
+                            else ctx.interaction:send("ExitFurnitureUseStates", entry.petUnique) end
+                        end)
+                        ctx.setPhase(entry, "using furniture")
                         ctx.logger:info("Tasks", string.format("Using %s %s for %s", spot.kind, spot.key, label))
                         local ok, reason = ctx.interaction:send("ActivateFurniture", Players.LocalPlayer, spot.key, spot.useName,
                             { cframe = spot.cframe }, target)
@@ -6361,20 +6534,18 @@ __moduleSources["Game/Tasks"] = function(...)
         end
         return set
     end
-    local function newPetObject(before)
+    local function newPetObject(before, response)
         local folder = workspace:FindFirstChild(GameConstants.PetObjectsFolderName)
-        if not folder then
-            return nil
-        end
-        for _, child in ipairs(folder:GetChildren()) do
-            if not before[child] then
-                return child
-            end
+        -- A newly replicated object can belong to another player. Only use an instance
+        -- explicitly returned by this request; normal automatic consumption remains supported.
+        if folder and typeof(response) == "Instance" and response:IsDescendantOf(folder) and not before[response] then
+            return response
         end
         return nil
     end
     local function pickItem(ctx, kind)
         local ids = GameConstants.ItemsForAilment[kind]
+        if not ctx.gameData:inventoryKnown(GameConstants.ItemCategory) then return nil, "food inventory unavailable" end
         local found = ctx.gameData:findItems(GameConstants.ItemCategory, ids)
         if found[1] then
             return found[1]
@@ -6393,7 +6564,8 @@ __moduleSources["Game/Tasks"] = function(...)
             ctx.gameData.buysThisSession = buysThisSession
             local bucksBefore = ctx.gameData:get(GameConstants.DataKeys.Money)
             ctx.logger:info("Tasks", string.format("Nothing for %s: buying 1 %s (purchase %d this session)", kind, id, buysThisSession))
-            ctx.interaction:send("BuyItem", buy.category, id, table.clone(buy.options))
+            local sent, purchaseReason = ctx.interaction:send("BuyItem", buy.category, id, table.clone(buy.options))
+            if not sent then return nil, tostring(purchaseReason) end
             local bought
             ctx.waitUntil(function()
                 bought = ctx.gameData:findItems(GameConstants.ItemCategory, ids)[1]
@@ -6406,7 +6578,7 @@ __moduleSources["Game/Tasks"] = function(...)
                 end
                 return bought
             end
-            ctx.logger:warn("Tasks", "Bought " .. id .. " but it did not appear in your backpack")
+            return nil, "purchase of " .. id .. " not confirmed in inventory; no further purchase attempted"
         end
         return nil, "could not buy " .. table.concat(buy.ids, " / ")
     end
@@ -6416,40 +6588,34 @@ __moduleSources["Game/Tasks"] = function(...)
         if not model then
             return false, "pet model: " .. tostring(reason)
         end
+        if not ctx.gameData:inventoryKnown(GameConstants.ItemCategory) or not ctx.gameData:item(GameConstants.ItemCategory, item.unique) then
+            return false, "item no longer available in confirmed inventory"
+        end
         local before = petObjectsSnapshot()
-        local held = true
-        ctx.maid:Give(function()
-            if held then
-                ctx.interaction:send("UnequipItem", item.unique, nil)
-            end
-        end)
-        ctx.logger:info("Tasks", string.format("Giving %s to your pet (%s)", item.id, label))
-        ctx.interaction:send("EquipItem", item.unique, {})
-        task.wait(0.5)
-        ctx.interaction:send("FocusPet", model)
-        ctx.interaction:send("UseTool", item.unique, "START")
+        local held, focused = false, false
+        local function release()
+            if focused then ctx.interaction:send("UnfocusPet", model); focused = false end
+            if held then ctx.interaction:send("UnequipItem", item.unique, nil); held = false end
+        end
+        ctx.maid:Give(release)
+        ctx.logger:info("Tasks", string.format("Giving %s to selected pet %s (%s)", item.id, petUnique, label))
+        held = true -- Register cleanup before the request can yield.
+        local equipped, equipReason = ctx.interaction:send("EquipItem", item.unique, {})
+        if not equipped then return false, "food equip failed: " .. tostring(equipReason) end
+        focused = true
+        local focusOk, focusReason = ctx.interaction:send("FocusPet", model)
+        if not focusOk then return false, "pet focus failed: " .. tostring(focusReason) end
         local created, createAnswer = ctx.interaction:send("CreatePetObject", GameConstants.FoodObjectCreator,
             { additional_consume_uniques = {}, pet_unique = petUnique, unique_id = item.unique })
-        ctx.interaction:send("UnequipItem", item.unique, nil)
-        held = false
-        ctx.interaction:send("UnfocusPet", model)
-        if not created or createAnswer == false then
-            return false, string.format("the game refused %s for %s (age %s): %s", item.id,
-                tostring(ctx.gameData:getPetKind(petUnique)), tostring(ctx.gameData:petAge(petUnique)), tostring(createAnswer))
+        if not created then return false, "food object request failed: " .. tostring(createAnswer) end
+        if ctx.waitUntil(done, PET_EAT_SECONDS) then release(); return true end
+        local object = newPetObject(before, createAnswer)
+        if object then
+            local sent, why = ctx.interaction:send("ConsumeFoodObject", object, petUnique)
+            if not sent then return false, "consume request failed: " .. tostring(why) end
+            if ctx.waitUntil(done, 8) then release(); return true end
         end
-        if ctx.waitUntil(done, PET_EAT_SECONDS) then
-            return true
-        end
-        local object = newPetObject(before)
-        if not object then
-            return false, "no object appeared for your pet"
-        end
-        ctx.logger:info("Tasks", "Your pet did not take it by itself: sending ConsumeFoodObject")
-        ctx.interaction:send("ConsumeFoodObject", object, petUnique)
-        if ctx.waitUntil(done, 5) then
-            return true
-        end
-        return false, label .. " not done after giving " .. item.id
+        return false, label .. " unconfirmed after " .. item.id .. "; no unrelated world object used"
     end
     local function feedPet(ctx, kind, entry, item)
         return Tasks.givePetItem(ctx, entry.petUnique, item, function()
@@ -6464,24 +6630,28 @@ __moduleSources["Game/Tasks"] = function(...)
                 ctx.interaction:send("UnequipItem", item.unique, nil)
             end
         end)
+        ctx.maid:Give(function() ctx.interaction:send("UseTool", item.unique, "END", nil) end)
         ctx.logger:info("Tasks", string.format("Baby uses %s (%s)", item.id, kind))
-        ctx.interaction:send("EquipItem", item.unique, {})
+        local equipped, equipReason = ctx.interaction:send("EquipItem", item.unique, {})
+        if not equipped then return false, "baby equip failed: " .. tostring(equipReason) end
         task.wait(0.5)
         local function done()
             return ctx.completedSince(kind, "baby", nil) or ctx.findEntry(kind, "baby", nil) == nil
         end
-        for _ = 1, 12 do
+        for _ = 1, math.min(12, math.max(1, ctx.gameData:itemUsesLeft(GameConstants.ItemCategory, item.unique) or 1)) do
             if done() then
                 break
             end
+            if not ctx.gameData:inventoryKnown(GameConstants.ItemCategory) then return false, "baby inventory unavailable" end
             local usesBefore = ctx.gameData:itemUsesLeft(GameConstants.ItemCategory, item.unique)
+            if usesBefore == nil or usesBefore <= 0 then break end
             local sent, reason = ctx.interaction:send("UseTool", item.unique, "START")
             if not sent then return false, "baby tool failed: " .. tostring(reason) end
             task.wait(BABY_HOLD_SECONDS)
             ctx.interaction:send("UseTool", item.unique, "END", nil)
             if not ctx.waitUntil(function()
                 local now = ctx.gameData:itemUsesLeft(GameConstants.ItemCategory, item.unique)
-                return done() or now == nil or (usesBefore ~= nil and now < usesBefore)
+                return done() or (ctx.gameData:inventoryKnown(GameConstants.ItemCategory) and (now == nil or now < usesBefore))
             end, 3) then
                 return false, item.id .. ": uses_left did not go down"
             end
@@ -6492,7 +6662,8 @@ __moduleSources["Game/Tasks"] = function(...)
         end
         held = false
         ctx.waitUntil(done, 3)
-        return done()
+        if done() then return true end
+        return false, "baby need remains active after item use"
     end
     local function bowlForPet(ctx, kind, entry)
         if not ctx.travel:isAt(GameConstants.HouseInteriorName) then
@@ -6517,6 +6688,8 @@ __moduleSources["Game/Tasks"] = function(...)
         if not off then
             return false, offReason
         end
+        ctx.maid:Give(function() ctx.interaction:send("ExitFurnitureUseStates", entry.petUnique) end)
+        ctx.setPhase(entry, "using food bowl")
         ctx.logger:info("Tasks", string.format("Using food bowl %s for your pet", spot.key))
         local ok, sendReason = ctx.interaction:send("ActivateFurniture", Players.LocalPlayer, spot.key, spot.useName, { cframe = spot.cframe }, model)
         if not ok then
@@ -6559,8 +6732,7 @@ __moduleSources["Game/Tasks"] = function(...)
                     end
                     local bowlFirst = entry.owner == "pet" and group.kind == "hungry" and not entry.triedBowl and not ctx.side
                     if bowlFirst and not ctx.farmConfig.FoodBowlTrip and ctx.travel
-                        and not ctx.travel:isAt(GameConstants.HouseInteriorName)
-                        and ctx.gameData:findItems(GameConstants.ItemCategory, GameConstants.ItemsForAilment[group.kind])[1] ~= nil then
+                        and not ctx.travel:isAt(GameConstants.HouseInteriorName) then
                         entry.triedBowl = true
                         ctx.logger:info("Tasks", "Food in your backpack: feeding here, no trip home for the bowl (Farm.FoodBowlTrip)")
                     end
@@ -6568,7 +6740,9 @@ __moduleSources["Game/Tasks"] = function(...)
                         entry.triedBowl = true
                         local bowlOk, bowlReason = bowlForPet(ctx, group.kind, entry)
                         if bowlOk == false then
-                            return false, bowlReason
+                            ctx.logger:warn("Tasks", "Bowl failed: " .. tostring(bowlReason) .. "; trying inventory after release")
+                            local released, releaseReason = petOffFurniture(ctx, entry.petUnique)
+                            if not released then return false, releaseReason end
                         elseif bowlOk == true then
                             break
                         end
@@ -6585,8 +6759,8 @@ __moduleSources["Game/Tasks"] = function(...)
                         end
                     else
                         ok, feedReason = feedBaby(ctx, group.kind, item)
-                        if feedReason then
-                            return false, feedReason
+                        if not ok then
+                            return false, feedReason or "baby feeding unconfirmed"
                         end
                     end
                 end
@@ -6647,7 +6821,7 @@ __moduleSources["Game/Tasks"] = function(...)
                 end
                 task.wait(0.5)
                 ctx.interaction:send("UseTool", toy.unique, "START")
-                ctx.interaction:send("CreatePetObject", GameConstants.ToyObjectCreator,
+                local created, toyObject = ctx.interaction:send("CreatePetObject", GameConstants.ToyObjectCreator,
                     { reaction_name = GameConstants.ThrowToyReaction, unique_id = toy.unique })
                 ctx.interaction:send("UnequipItem", toy.unique, { from_throw_toy = true })
                 ctx.interaction:send("UseTool", toy.unique, "END", nil)
@@ -6656,7 +6830,7 @@ __moduleSources["Game/Tasks"] = function(...)
                     return after == nil or (after.progress or 0) > progressBefore
                 end
                 if not ctx.waitUntil(caught, THROW_CATCH_SECONDS) then
-                    local object = newPetObject(before)
+                    local object = created and newPetObject(before, toyObject)
                     if not object then
                         return false, "no toy object appeared after the throw"
                     end
@@ -6721,7 +6895,7 @@ __moduleSources["Game/Tasks"] = function(...)
             end)
         end
         for _, module in ipairs(folder and folder:GetDescendants() or {}) do
-            if module:IsA("ModuleScript") and (loaded == nil or loaded[module]) then
+            if module:IsA("ModuleScript") and (loaded ~= nil and loaded[module]) then
                 local ok, value = pcall(require, module)
                 if ok and type(value) == "table" then
                     take(rawget(value, "get_ailment_slots"), module.Name)
@@ -6751,8 +6925,8 @@ __moduleSources["Game/Tasks"] = function(...)
             mysteryClient and "ok" or "NOT found", #found, table.concat(where, ", ")))
     end
     function Tasks.mysteryCards(ctx, entry)
-        if not mysteryLookupDone then
-            mysteryLookupDone = true
+        if not mysteryLookupDone or (not mysteryClient and Util.now() - mysteryLookupDone > 30) then
+            mysteryLookupDone = Util.now()
             findMysterySlotsFn(ctx)
         end
         if not mysteryClient then
@@ -6852,105 +7026,25 @@ __moduleSources["Game/Tasks"] = function(...)
                     table.insert(choices, kind)
                 end
             end
-            -- the rest of the offered pool goes last in the burst: a need I cannot do beats a mystery card that never ends
-            local preferred = #choices
-            for _, kind in ipairs(entry.mysteryOptions or {}) do
-                if kind ~= "mystery" and not table.find(choices, kind) then
-                    table.insert(choices, kind)
-                end
-            end
-            if #choices == 0 then
-                return false, "no doable need among the mystery options"
-            end
-            if preferred == 0 then
-                ctx.logger:info("Tasks", "Mystery: no doable kind on the cards: picking any offered one to end it")
-            end
-            ctx.logger:info("Tasks", string.format("Mystery: pool %s, seed %s, %d kinds, one kind on all 3 cards at a time",
-                table.concat(entry.mysteryOptions or {}, ","), tostring(entry.mysterySeed), #choices))
-            -- v2.1.3: the one-burst spam failed (reports: 15 done / 55 failed: the server only takes the first few
-            -- messages of a burst). Now: one kind on cards 1-3 at once (3 messages: one of the cards shows it, if any), a
-            -- short wait, the next kind. 14 kinds: ~11 s at most instead of ~50 s.
-            local function gone()
-                return ctx.findEntry("mystery", "pet", entry.petUnique) == nil
-            end
-            -- v2.1.5: the 3 real cards from the game's MysteryHelper -> one call on the right card
+            if #choices == 0 then return false, "no enabled need among the offered mystery options" end
             local okCards, cards, how = pcall(Tasks.mysteryCards, ctx, entry)
-            -- the server drops calls that come in quick succession: a quiet moment first
-            local quiet = 3 - (Util.now() - (Tasks._lastMysterySend or 0))
-            if quiet > 0 then
-                task.wait(quiet)
+            if not okCards or type(cards) ~= "table" then
+                return false, "mystery cards unavailable: " .. tostring(okCards and how or cards)
             end
-            if okCards and type(cards) == "table" then
-                local pick, slot
-                for _, kind in ipairs(choices) do
-                    for i, card in ipairs(cards) do
-                        if card == kind then
-                            pick, slot = kind, i
-                            break
-                        end
-                    end
-                    if pick then
-                        break
-                    end
-                end
-                ctx.logger:info("Tasks", string.format("Mystery: cards %s (%s) -> card %s: %s", table.concat(cards, ", "),
-                    tostring(how), tostring(slot), tostring(pick)))
-                if pick then
-                    for attempt = 1, 2 do
-                        Tasks._lastMysterySend = Util.now()
-                        pcall(function()
-                            ctx.interaction:send("ChooseMystery", entry.petUnique, "mystery", slot, pick)
-                        end)
-                        if ctx.waitUntil(gone, 5) then
-                            ctx.logger:info("Tasks", "Mystery accepted: " .. pick .. " (card " .. slot .. ")")
-                            return true
-                        end
-                    end
-                    ctx.logger:info("Tasks", "Mystery: the card was not taken: trying every kind")
-                end
-            else
-                ctx.logger:info("Tasks", "Mystery: the 3 cards could not be read (" .. tostring(okCards and how or cards)
-                    .. "): trying every kind, slowly")
+            local pick, slot
+            for _, kind in ipairs(choices) do
+                for i, card in ipairs(cards) do if card == kind then pick, slot = kind, i; break end end
+                if pick then break end
             end
-            -- v2.1.4 (user: "mystery still fails: no time limit, send every need in turn until it is accepted"; a
-            -- report: the same first kind was refused twice, then taken at once on the 3rd try): round after round
-            -- over every kind until the card is gone (task limit 300 s), never "failed" after one round
-            local round = 0
-            local deadline = Util.now() + 280
-            while Util.now() < deadline do
-                round += 1
-                for index, kind in ipairs(choices) do
-                    if gone() then
-                        ctx.logger:info("Tasks", "Mystery: the card is gone")
-                        return true
-                    end
-                    -- v2.1.6 (spy v3: calls in quick succession are dropped, even the right card): one call every 2.5 s
-                    local gap = 2.5
-                    for slot = 1, 3 do
-                        Tasks._lastMysterySend = Util.now()
-                        pcall(function()
-                            ctx.interaction:send("ChooseMystery", entry.petUnique, "mystery", slot, kind)
-                        end)
-                        if ctx.waitUntil(gone, gap) then
-                            ctx.logger:info("Tasks", string.format("Mystery accepted: %s (card %d, kind %d of %d, round %d)",
-                                kind, slot, index, #choices, round))
-                            return true
-                        end
-                    end
-                    if ctx.waitUntil(gone, 0.5) then
-                        ctx.logger:info("Tasks", string.format("Mystery accepted: %s (kind %d of %d, round %d, seed %s)", kind,
-                            index, #choices, round, tostring(entry.mysterySeed)))
-                        return true
-                    end
-                end
-                if ctx.waitUntil(gone, 2) then
-                    return true
-                end
-                if round == 1 or round % 5 == 0 then
-                    ctx.logger:info("Tasks", string.format("Mystery: round %d, not taken yet: again", round))
-                end
-            end
-            return false, "mystery did not change into a chosen need in " .. round .. " rounds"
+            if not pick then return false, "no enabled need on the current mystery cards" end
+            local revision = ctx.state:get("ailments.revision", 0)
+            local sent, why = ctx.interaction:send("ChooseMystery", entry.petUnique, "mystery", slot, pick)
+            if not sent then return false, "mystery choice failed: " .. tostring(why) end
+            local confirmed = ctx.waitUntil(function()
+                return ctx.isResolved(entry) or ctx.confirmReplacement(entry, pick, revision)
+            end, 12)
+            if confirmed then return true end
+            return false, "mystery choice did not replicate; no speculative card burst sent"
         end,
     }
     local function movingNeed(kind)
@@ -7267,7 +7361,10 @@ __moduleSources["Game/Tasks"] = function(...)
                 end
             end
             if group.onOneSlot then group.onOneSlot() end
-            if not ctx.gameData:isPetEquipped(group.firstUnique) then equipPetAgain(ctx, group.firstUnique) end
+            if not ctx.gameData:isPetEquipped(group.firstUnique) then
+                if ctx.restoreDisplacedPet then ctx.restoreDisplacedPet(group.firstUnique, group.petUnique)
+                else equipPetAgain(ctx, group.firstUnique) end
+            end
             return false, "two slots were not confirmed; check active certificate or equip the pair manually"
         end,
     }
@@ -7384,9 +7481,14 @@ __moduleSources["Game/Tasks"] = function(...)
     function Tasks.runNeedGroup(ctx, definition, group, attempt)
         if definition.id == "location" then
             local ok, reason = definition.run(ctx, group, attempt)
-            if not ok then return false, reason end
+            if not ok then
+                for _, entry in ipairs(group.entries) do ctx.recordNeedResult(entry, ctx.isResolved(entry)) end
+                return false, reason
+            end
             for _, entry in ipairs(group.entries) do
-                if not ctx.waitForNeed(entry, 8) then
+                local confirmed = ctx.waitForNeed(entry, 8)
+                ctx.recordNeedResult(entry, confirmed)
+                if not confirmed then
                     return false, "location did not confirm " .. entry.owner .. " " .. tostring(entry.petUnique)
                 end
             end
@@ -7405,11 +7507,20 @@ __moduleSources["Game/Tasks"] = function(...)
                 local participantMaid = Maid.new()
                 ctx.maid:Give(function() participantMaid:Clean() end)
                 local child = setmetatable({ maid = participantMaid }, { __index = ctx })
+                function child.currentGroup(kind)
+                    if kind ~= entry.kind then return nil end
+                    local current = ctx.findEntry(kind, entry.owner, entry.petUnique)
+                    return current and NeedSession.single(current) or nil
+                end
+                function child.isKindGone(kind) return child.currentGroup(kind) == nil end
+                function child.kindCompletedSince(kind) return kind == entry.kind and ctx.isResolved(entry) end
+                ctx.setPhase(entry, "running")
                 local ran, ok, reason = pcall(definition.run, child, NeedSession.single(entry), attempt)
                 participantMaid:Clean()
                 if not ran then reason, ok = "script error: " .. tostring(ok), false end
                 local confirmed = ctx.isResolved(entry)
                 if ok == true and not confirmed then confirmed = ctx.waitForNeed(entry, 15) end
+                ctx.recordNeedResult(entry, confirmed)
                 if not confirmed then
                     table.insert(errors, label .. ": " .. tostring(reason or "no confirmed completion"))
                     ctx.logger:warn("Needs", errors[#errors])
@@ -7641,6 +7752,7 @@ __moduleSources["Game/Hauntlet"] = function(...)
         self.roomSeq = 0
         self.roomsOpened = 0
         self.revealedGhost = nil
+        self.lastReveal = nil
         self._heartDumps, self._heartSign = 0, nil
         self.lastPickSeq, self.lastPickAt = nil, nil
         self.usedItems = {}
@@ -9213,12 +9325,10 @@ __moduleSources["Game/EventTasks"] = function(...)
     end
     function EventTasks.nextRoundStart(cycle, now)
         local start = type(cycle) == "table" and tonumber(cycle.timestamp)
-        if not start or type(now) ~= "number" then
-            return nil
-        end
-        while start + 20 < now do
-            start += E.RoundSeconds
-        end
+        local period = tonumber(E.RoundSeconds)
+        if not start or start ~= start or math.abs(start) == math.huge or type(now) ~= "number"
+            or now ~= now or math.abs(now) == math.huge or not period or period <= 0 or period == math.huge then return nil end
+        if start + 20 < now then start += math.ceil((now - 20 - start) / period) * period end
         return start
     end
     -- focus / kindOf (Mega a Pet): a pen pet of another kind makes room for a waiting copy of the focus pet
@@ -9251,7 +9361,7 @@ __moduleSources["Game/EventTasks"] = function(...)
             if free <= 0 then
                 break
             end
-            if not keep[pet.unique] then
+            if not keep[pet.unique] and (not focus or pet.kind == focus) then
                 table.insert(plan.add, pet.unique)
                 free -= 1
             end
@@ -9315,8 +9425,10 @@ __moduleSources["Game/EventTasks"] = function(...)
             for _, pet in ipairs(ctx.gameData:equippedPetList()) do
                 keep[pet.unique] = true
             end
-            if group and group.keep then
-                keep[group.keep] = true
+            if group and group.keep then keep[group.keep] = true end
+            local selection = ctx.gameData.selection
+            if selection and selection:enabled() then
+                for _, id in ipairs(selection.ids) do keep[id] = true end
             end
             local slots = tonumber(ctx.farmConfig.Event.PetPenSlots) or E.PetPenSlots
             local plan = EventTasks.penPlan(ctx.gameData:petPenPets(),
@@ -9338,12 +9450,16 @@ __moduleSources["Game/EventTasks"] = function(...)
                 table.insert(done, "claimed" .. ((tonumber(after) and tonumber(bucks) and after > bucks)
                     and string.format(" (+%d Bucks)", after - bucks) or ""))
             end
+            -- Claiming can mature pets; compute the moves from the post-claim data.
+            plan = EventTasks.penPlan(ctx.gameData:petPenPets(),
+                ctx.gameData:growablePets(ctx.farmConfig.PreferNeon == true, GameConstants.kindRank(ctx.farmConfig)), keep, slots,
+                GameConstants.focusKind(ctx.farmConfig), function(unique) return ctx.gameData:getPetKind(unique) end)
             local penNow = ctx.gameData:petPenPets()
             for _, unique in ipairs(plan.remove) do
                 local grown = type(penNow[unique]) == "table" and penNow[unique].max_age == true
                 ctx.interaction:send("PetPenRemove", unique)
                 if not ctx.waitUntil(function()
-                    return ctx.gameData:petPenPets()[unique] == nil
+                    return type(ctx.gameData:get(KEYS.PetPen)) == "table" and ctx.gameData:petPenPets()[unique] == nil
                 end, 6) then
                     return false, "pet " .. unique .. " did not leave the pen"
                 end
@@ -9351,6 +9467,9 @@ __moduleSources["Game/EventTasks"] = function(...)
                     or ("made room for the focus pet (took out " .. tostring(ctx.gameData:getPetKind(unique) or unique) .. ")"))
             end
             for _, unique in ipairs(plan.add) do
+                if ctx.gameData:isPetProtected(unique) or ctx.gameData:isPetEquipped(unique) then
+                    return false, "pet selection changed before pen placement"
+                end
                 ctx.interaction:send("PetPenAdd", unique)
                 if not ctx.waitUntil(function()
                     return ctx.gameData:petPenPets()[unique] ~= nil
@@ -9529,9 +9648,15 @@ __moduleSources["Game/EventTasks"] = function(...)
                     return tostring(type(data) == "table" and data.seed) .. "/" .. opened
                 end
                 local before = signature()
+                if not ctx.gameData:petInventoryKnown() then return false, "pet inventory unavailable before spider claim" end
+                local petsBefore = ctx.gameData:petUniquesOfKind(E.MummySpiderKind)
                 local _, answer = ctx.interaction:send("ClaimTombSpider")
                 if ctx.waitUntil(function()
-                    return signature() ~= before
+                    if signature() == before or not ctx.gameData:petInventoryKnown() then return false end
+                    for unique in pairs(ctx.gameData:petUniquesOfKind(E.MummySpiderKind)) do
+                        if not petsBefore[unique] then return true end
+                    end
+                    return false
                 end, 8) then
                     ctx.logger:success("Event", "Crypt: Mummy Spider claimed, the Crypt starts again")
                     return true
@@ -9556,14 +9681,14 @@ __moduleSources["Game/EventTasks"] = function(...)
             ctx.logger:info("Event", string.format("Crypt: opening grave %d on floor %d (%s)", plan.grave, plan.floor, plan.reward))
             local _, answer = ctx.interaction:send("UnlockPadlock", { padlock_index = plan.grave, floor_index = plan.floor })
             if not ctx.waitUntil(function()
-                local _, n = openedSet()
-                return n > before
+                local opened = openedSet()
+                return opened[plan.floor * E.OpenedIdPerFloor + plan.grave] == true
             end, 6) then
                 return false, "the grave did not open (answer: " .. tostring(answer) .. ")"
             end
             local set = openedSet()
             if not set[plan.floor * E.OpenedIdPerFloor + plan.grave] then
-                ctx.logger:warn("Event", "Crypt: a grave opened, but not with the expected id (floor * 16 + grave)")
+                return false, "Crypt: expected grave opening not confirmed"
             end
             ctx.logger:success("Event", "Crypt: opened " .. plan.reward .. " on floor " .. plan.floor)
             if preferTwig then
@@ -9696,10 +9821,9 @@ __moduleSources["Game/EventTasks"] = function(...)
             local leverState = manager.lever_state
             if type(leverState) == "string" then
                 local lower = string.lower(leverState)
-                if lower ~= "deactivated" and lower ~= "" and lower ~= "none" and lower ~= "missing" then
-                    return true, true
-                end
-                return false, false
+                if lower == "activated" then return true, true end
+                if lower == "installed" or lower == "delivered" then return true, false end
+                return false, false -- Unknown strings are not proof of installation.
             end
             scan(manager, 0)
         end
@@ -9900,7 +10024,7 @@ __moduleSources["Game/EventTasks"] = function(...)
         local hidden = {}
         pcall(function()
             for _, screen in ipairs(gui and gui:GetChildren() or {}) do
-                if screen:IsA("ScreenGui") and screen.Enabled and screen.Name ~= "InteractionsApp" then
+                if screen:IsA("ScreenGui") and screen.Enabled and screen.Name ~= "InteractionsApp" and not string.find(screen.Name, "Adopt", 1, true) then
                     screen.Enabled = false
                     table.insert(hidden, screen)
                 end
@@ -9913,6 +10037,7 @@ __moduleSources["Game/EventTasks"] = function(...)
                 end)
             end
         end
+        ctx.maid:Give(restore)
         local button
         ctx.waitUntil(function()
             button = findButton()
@@ -9924,10 +10049,8 @@ __moduleSources["Game/EventTasks"] = function(...)
         end
         local path = button:GetFullName()
         for _, method in ipairs(ctx.interaction.CLICK_METHODS or {}) do
-            local ran = pcall(function()
-                ctx.interaction.clickButton(button, method)
-            end)
-            if ran and ctx.waitUntil(function()
+            local callOk, ran = pcall(ctx.interaction.clickButton, button, method)
+            if callOk and ran and ctx.waitUntil(function()
                 return button.Parent == nil or findButton() ~= button
             end, 2) then
                 restore()
@@ -9945,25 +10068,30 @@ __moduleSources["Game/EventTasks"] = function(...)
         local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
         local part, node = machine.part, machine.node
         local scope = { node }
-        if node.Parent then
-            table.insert(scope, node.Parent)
-        end
+
         -- 1) prompts and click detectors on / around the machine
+        local seenPrompts = {}
         for _, holder in ipairs(scope) do
-            for _, item in ipairs(holder:GetDescendants()) do
-                if item:IsA("ProximityPrompt") then
+            local candidates = holder:GetDescendants()
+            table.insert(candidates, 1, holder)
+            for _, item in ipairs(candidates) do
+                if item:IsA("ProximityPrompt") and not seenPrompts[item] then
+                    seenPrompts[item] = true
                     if type(fireproximityprompt) == "function" then
                         pcall(fireproximityprompt, item)
                         table.insert(done, "prompt " .. item.Name)
+                        return table.concat(done, ", ")
                     end
                     pcall(function()
                         item:InputHoldBegin()
                         task.wait(math.max(0.1, tonumber(item.HoldDuration) or 0) + 0.1)
                         item:InputHoldEnd()
                     end)
+                    return "prompt hold submitted"
                 elseif item:IsA("ClickDetector") and type(fireclickdetector) == "function" then
                     pcall(fireclickdetector, item)
                     table.insert(done, "clickdetector " .. item.Name)
+                    return table.concat(done, ", ")
                 end
             end
         end
@@ -10196,12 +10324,12 @@ __moduleSources["Game/EventTasks"] = function(...)
                         -- (they counted as failures and paused the lever install too); the Crypt for the lever
                         state.leverRequired = true
                         EventTasks.skelicornNote("shop: not for sale until this account's lever is in the machine")
-                        return true
+                        return false, "Skelicorn unavailable until lever installation is confirmed"
                     end
                     -- (skelicorn.log: "no answer from server" twice = 2 failures toward the 15 min pause of this task)
                     EventTasks.skelicornNote(string.format("buy: no Skelicorn (answer %s %s): again in 2 min", tostring(sent),
                         Util.truncate(tostring(answer), 60)))
-                    return true
+                    return false, "Skelicorn purchase unconfirmed"
                 end
                 state.bought = true
                 state.delivered = true -- it sells: whatever the lever manager says, the machine is open for me
@@ -10456,6 +10584,10 @@ __moduleSources["Game/EventTasks"] = function(...)
             if not vacuum then
                 return finish(false, "no vacuum in the backpack")
             end
+            ctx.maid:Give(function()
+                ctx.interaction:send("UseTool", vacuum, "END", nil)
+                ctx.interaction:send("UnequipItem", vacuum, nil)
+            end)
             ctx.interaction:send("EquipItem", vacuum, {})
             ctx.waitUntil(function()
                 return mg.enter ~= nil
@@ -10495,8 +10627,10 @@ __moduleSources["Game/EventTasks"] = function(...)
                 else
                     held.target = target
                     holdNow()
-                    ctx.interaction:send("UseTool", vacuum, "START")
-                    local token = EventTasks.newToken()
+                    local started, token = ctx.interaction:send("UseTool", vacuum, "START")
+                    if not started or type(token) ~= "string" or token == "" then
+                        return false, "vacuum did not return a valid use token"
+                    end
                     uses += 1
                     local isGhost = target.kind == "ghost"
                     local payload = isGhost and { use_token = token, ghost_id = target.id } or { use_token = token, unique = target.id }
@@ -10506,8 +10640,8 @@ __moduleSources["Game/EventTasks"] = function(...)
                         if mg.leave or (isGhost and target.model.Parent == nil) or (not isGhost and not mg.haunted[target.id]) then
                             break
                         end
-                        if target.boss and send > 1 and EventTasks.pickTarget(ctx, folder, mg) ~= nil
-                            and not EventTasks.pickTarget(ctx, folder, mg).boss then
+                        local nextTarget = target.boss and send > 1 and EventTasks.pickTarget(ctx, folder, mg)
+                        if nextTarget and not nextTarget.boss then
                             break
                         end
                         ctx.interaction:send("MinigameMessage", gameId, startMessage, payload)
@@ -10671,7 +10805,7 @@ __moduleSources["Game/EventTasks"] = function(...)
             local function switchedOff()
                 local farm = ctx.farmConfig
                 return type(farm) == "table" and (farm.Enabled == false
-                    or (type(farm.Event) == "table" and farm.Event.Hauntlet == false))
+                    or (type(farm.Event) == "table" and (farm.Event.Enabled == false or farm.Event.Hauntlet == false)))
             end
             pcall(function() -- every room after this one is seen being added (the newest room = mine)
                 ctx.interaction:watchHauntlet(h.join and h.join.interior)
@@ -10885,10 +11019,10 @@ __moduleSources["Game/EventTasks"] = function(...)
                             end
                         end
                         local seq = h.usedSeq
-                        local sent = pcall(function()
-                            ctx.interaction:send("HauntletMessage", sessionId, "try_use_item", plan.use)
+                        local callOk, sent = pcall(function()
+                            return ctx.interaction:send("HauntletMessage", sessionId, "try_use_item", plan.use)
                         end)
-                        if sent then
+                        if callOk and sent then
                             ctx.waitUntil(function()
                                 return h.usedSeq > seq or over() or h.room ~= room
                             end, 5)
@@ -11265,6 +11399,13 @@ __moduleSources["Game/EventTasks"] = function(...)
                 local money, candy = ctx.gameData:get(KEYS.Money), ctx.gameData:get(KEYS.Candy)
                 ctx.interaction:send(item.action, item.tab)
                 if ctx.waitUntil(function()
+                    local data = ctx.gameData:get(KEYS.Dailies)
+                    local tab = type(data) == "table" and type(data.serialized_tabs) == "table" and data.serialized_tabs[item.tab]
+                    if type(tab) ~= "table" then return false end
+                    if item.action == "QuestTabReward" then return tab.reward_claimed == true end
+                    for _, pending in ipairs(EventTasks.questsToClaim(data)) do
+                        if pending.action == item.action and pending.tab == item.tab then return false end
+                    end
                     return tabSignature(item.tab) ~= before
                 end, 6) then
                     changed += 1
@@ -11283,8 +11424,8 @@ __moduleSources["Game/EventTasks"] = function(...)
                     ctx.logger:info("Event", "Quests: " .. item.action .. "(" .. item.tab .. ") changed nothing in my data")
                 end
             end
-            if changed == 0 then
-                return false, "no quest claim changed my data"
+            if changed < #todo then
+                return false, "one or more quest claims remain unconfirmed"
             end
             return true
         end,
@@ -11334,7 +11475,9 @@ __moduleSources["Game/EventTasks"] = function(...)
                     ctx.travel:visitHouse(player)
                     local ok = ctx.waitUntil(function()
                         local now = EventTasks.visitQuest(ctx.gameData:get(KEYS.Dailies))
-                        return now == nil or now.visited[id] == true or now.done > quest.done
+                        local data = ctx.gameData:get(KEYS.Dailies)
+                        if type(data) ~= "table" or type(data.serialized_tabs) ~= "table" then return false end
+                        return now == nil or (now.kind == quest.kind and (now.visited[id] == true or now.done > quest.done))
                     end, 15)
                     if ok then
                         counted += 1
@@ -11384,7 +11527,7 @@ __moduleSources["Game/EventTasks"] = function(...)
         end
         local list, seen = {}, {}
         for _, id in ipairs(type(settings.Potions) == "table" and settings.Potions or GameConstants.FarmPotions) do
-            if not skip[id] and not seen[id] then
+            if GameConstants.isFarmPotion(id) and not skip[id] and not seen[id] then
                 seen[id] = true
                 table.insert(list, id)
             end
@@ -11419,6 +11562,8 @@ __moduleSources["Game/EventTasks"] = function(...)
             for _, id in ipairs(list) do
                 local ok = pass == 1 or (pass == 4 and petIdle == true)
                     or ((pass == 2 or pass == 3) and EventTasks.buffFree(gameData, petUnique, pass, buffWait))
+                local age = gameData and petUnique and gameData:petAge(petUnique)
+                if (pass == 1 or pass == 2) and age and age >= GameConstants.FullGrownAge then ok = false end
                 if class(id) == pass and ok then
                     table.insert(ordered, id)
                 end
@@ -11524,7 +11669,7 @@ __moduleSources["Game/EventTasks"] = function(...)
             or "ready"
         return string.format("%s | potions in the bag: %s", why, #bag > 0 and table.concat(bag, ", ") or "none")
     end
-    function EventTasks.potionTarget(gameData, farm)
+    function EventTasks.potionTarget(gameData, farm, state)
         local settings = type(farm.AutoPotions) == "table" and farm.AutoPotions or {}
         local kinds = {}
         for _, kind in ipairs(type(settings.PetKinds) == "table" and settings.PetKinds or {}) do
@@ -11536,8 +11681,11 @@ __moduleSources["Game/EventTasks"] = function(...)
         end
         for _, pet in ipairs(gameData:equippedPetList()) do
             local age = pet.unique and gameData:petAge(pet.unique)
-            if age and age < GameConstants.FullGrownAge and (next(kinds) == nil or kinds[gameData:getPetKind(pet.unique) or ""]) then
-                return pet.unique
+            local selection = gameData.selection
+            local permitted = not selection or not selection:enabled() or selection:isProtected(pet.unique)
+            if permitted and age and (next(kinds) == nil or kinds[gameData:getPetKind(pet.unique) or ""]) then
+                local ids = EventTasks.potionList(farm, gameData, EventTasks.petIdle(state, pet.unique), pet.unique)
+                if gameData:findItems(GameConstants.ItemCategory, ids)[1] then return pet.unique end
             end
         end
         return nil
@@ -11546,7 +11694,7 @@ __moduleSources["Game/EventTasks"] = function(...)
         id = "age_potion",
         timeoutSeconds = 40,
         run = function(ctx)
-            local petUnique = EventTasks.potionTarget(ctx.gameData, ctx.farmConfig)
+            local petUnique = EventTasks.potionTarget(ctx.gameData, ctx.farmConfig, ctx.state)
             local potions = EventTasks.potionList(ctx.farmConfig, ctx.gameData, EventTasks.petIdle(ctx.state, petUnique), petUnique)
             local item = #potions > 0 and ctx.gameData:findItems(GameConstants.ItemCategory, potions)[1] or nil
             if not petUnique or not item then
@@ -11559,7 +11707,7 @@ __moduleSources["Game/EventTasks"] = function(...)
                 EventTasks.buffMark(petUnique, itemClass) -- before giving: a slow answer must not mean "again in 5 s"
             end
             local ok, why = Tasks.givePetItem(ctx, petUnique, item, function()
-                return ctx.gameData:itemUsesLeft(GameConstants.ItemCategory, item.unique) == nil
+                return (ctx.gameData:inventoryKnown(GameConstants.ItemCategory) and ctx.gameData:itemUsesLeft(GameConstants.ItemCategory, item.unique) == nil)
                     or (ctx.gameData:petAge(petUnique) or 0) > (ageBefore or 0)
             end, "age potion")
             if not ok then
@@ -11567,7 +11715,10 @@ __moduleSources["Game/EventTasks"] = function(...)
             end
             local class = EventTasks.potionClass(item.id)
             if class == 4 then
-                ctx.logger:success("Event", "Busy Body potion on " .. kind .. ": a new need to farm")
+                if not ctx.waitUntil(function() return not EventTasks.petIdle(ctx.state, petUnique) end, 8) then
+                    return false, "Busy Body item consumed but a new need was not observed"
+                end
+                ctx.logger:success("Event", "Busy Body potion on " .. kind .. ": new need observed")
                 return true
             elseif class > 1 then
                 -- marked before giving
@@ -11576,7 +11727,7 @@ __moduleSources["Game/EventTasks"] = function(...)
                     return (ctx.gameData:petAge(petUnique) or 0) > (ageBefore or 0)
                 end, 3)
             end
-            ctx.logger:success("Event", string.format("Potion %s on %s (age %s -> %s)", item.id, kind, tostring(ageBefore),
+            ctx.logger:success("Event", string.format("Potion %s consumed by %s (age %s -> %s; effect requires game data)", item.id, kind, tostring(ageBefore),
                 tostring(ctx.gameData:petAge(petUnique))))
             return true
         end,
@@ -11594,6 +11745,7 @@ __moduleSources["Game/EventTasks"] = function(...)
             local list = groups[focus]
             return focus, { list[1], list[2], list[3], list[4] }
         end
+        if focus then return nil end
         for kind, list in pairs(groups) do
             if #list >= 4 and (not bestList or #list > #bestList or (#list == #bestList and kind < bestKind)) then
                 bestKind, bestList = kind, list
@@ -11619,6 +11771,12 @@ __moduleSources["Game/EventTasks"] = function(...)
             end
             local neonsBefore = countNow()
             for _, unique in ipairs(uniques) do
+                if ctx.gameData:isPetProtected(unique) or ctx.gameData:isPetEquipped(unique) then
+                    return false, "fusion candidate became equipped/protected"
+                end
+            end
+            local selection = ctx.gameData.selection
+            for _, unique in ipairs((selection and selection:enabled()) and {} or uniques) do
                 ctx.interaction:send("EquipItem", unique, { equip_as_last = false, use_sound_delay = false })
                 task.wait(NEON_PLACE_WAIT)
                 ctx.interaction:send("UnequipItem", unique, nil)
@@ -11628,16 +11786,17 @@ __moduleSources["Game/EventTasks"] = function(...)
             local ok, answer = ctx.interaction:send("NeonFusion", { uniques[1], uniques[2], uniques[3], uniques[4] })
             local answered = type(answer) == "string" and answer or nil
             local function fused()
+                if not ctx.gameData:petInventoryKnown() then return false end
                 if answered and (mega and ctx.gameData:isPetMega(answered) or not mega and ctx.gameData:isPetNeon(answered)) then
                     return true
                 end
                 local gone = 0
                 for _, unique in ipairs(uniques) do
-                    if ctx.gameData:petAge(unique) == nil then
+                    if not ctx.gameData:hasPet(unique) then
                         gone += 1
                     end
                 end
-                return gone >= 3 and countNow() > neonsBefore
+                return gone == 4 and countNow() > neonsBefore
             end
             if ctx.waitUntil(fused, 6) then
                 if mega then
@@ -11788,12 +11947,16 @@ __moduleSources["Game/EventTasks"] = function(...)
                 return true
             end
             local function gone()
-                return ctx.gameData:itemUsesLeft(GameConstants.GiftCategory, gift.unique) == nil
+                return ctx.gameData:inventoryKnown(GameConstants.GiftCategory) and ctx.gameData:itemUsesLeft(GameConstants.GiftCategory, gift.unique) == nil
             end
-            ctx.interaction:send("EquipItem", gift.unique, {})
+            ctx.maid:Give(function()
+                ctx.interaction:send("UseTool", gift.unique, "END", nil)
+                ctx.interaction:send("UnequipItem", gift.unique, nil)
+            end)
+            local equipped, equipReason = ctx.interaction:send("EquipItem", gift.unique, {})
+            if not equipped then return false, equipReason end
             task.wait(0.5)
-            ctx.interaction:send("UseTool", gift.unique, "START")
-            task.wait(1)
+
             if gift.how == "gift" then
                 ctx.interaction:send("OpenGift", gift.unique)
                 ctx.waitUntil(gone, 4)
@@ -11813,9 +11976,87 @@ __moduleSources["Game/EventTasks"] = function(...)
     }
     return EventTasks
 end
+__moduleSources["Game/PetSelection"] = function(...)
+    -- This is a local selection, never a claim of ownership of a paid slot.
+    local Selection = {}
+    Selection.__index = Selection
+    function Selection.new(data, farm)
+        return setmetatable({ data = data, farm = farm, ids = {}, captured = false,
+            missingSince = {}, attempts = {}, twoSlotsObserved = false, secondBlocked = false }, Selection)
+    end
+    function Selection:enabled() return self.farm.KeepEquippedPair ~= false end
+    function Selection:contains(unique)
+        return table.find(self.ids, tostring(unique)) ~= nil
+    end
+    function Selection:isProtected(unique)
+        return self:enabled() and self.captured and self:contains(unique)
+    end
+    function Selection:capture()
+        local count, known = self.data:equippedPetCount()
+        if not known or count == 0 then return false, "Equipe um ou dois pets e aguarde os dados carregarem" end
+        if count > 2 then return false, "Formato de equipamento inesperado; seleção não alterada" end
+        local ids = {}
+        for _, pet in ipairs(self.data:equippedPetList()) do table.insert(ids, pet.unique) end
+        self.ids, self.captured = ids, true
+        self.twoSlotsObserved = count == 2
+        self.secondBlocked, self.missingSince, self.attempts = false, {}, {}
+        return true, "Seleção protegida: " .. table.concat(ids, ", ")
+    end
+    function Selection:observe(now)
+        local count, known = self.data:equippedPetCount()
+        if not known then return end
+        if count == 2 then self.twoSlotsObserved = true end
+        if not self.captured then self:capture() end
+        for _, id in ipairs(self.ids) do
+            if self.data:isPetEquipped(id) then
+                self.missingSince[id] = nil
+            else
+                self.missingSince[id] = self.missingSince[id] or now
+            end
+        end
+    end
+    function Selection:canEquip(unique)
+        unique = tostring(unique)
+        if self.data:isPetEquipped(unique) then return true end
+        local count, known = self.data:equippedPetCount()
+        if not known then return false, "equipment data unavailable" end
+        if self:enabled() then
+            if not self.captured or not self:contains(unique) then return false, "pet is not in the protected selection" end
+            for _, pet in ipairs(self.data:equippedPetList()) do
+                if not self:contains(pet.unique) then
+                    return false, "manual equipment changed; use Atualizar seleção to accept it"
+                end
+            end
+        end
+        if count >= 2 then return false, "no empty pet slot" end
+        if count == 1 and (not self.twoSlotsObserved or self.secondBlocked or self.farm.TwoPets == false) then
+            return false, "second slot not confirmed; equip the authorized pair manually"
+        end
+        return true
+    end
+    function Selection:recoveryCandidate(now)
+        if not self:enabled() or not self.captured or not self.farm.KeepPetEquipped then return nil end
+        for _, id in ipairs(self.ids) do
+            local since = self.missingSince[id]
+            if since and now - since >= 5 and (self.attempts[id] or 0) < 2
+                and self.data:hasPet(id) and self:canEquip(id) then return id end
+        end
+        return nil
+    end
+    function Selection:beginRecovery(id)
+        self.attempts[id] = (self.attempts[id] or 0) + 1
+    end
+    function Selection:status()
+        return { ids = table.clone(self.ids), captured = self.captured, enabled = self:enabled(),
+            twoSlotsObserved = self.twoSlotsObserved, secondBlocked = self.secondBlocked }
+    end
+    return Selection
+end
+
 __moduleSources["Game/TaskManager"] = function(...)
     local import = ...
     local NeedSession = import("Game/NeedSession")
+    local PetSelection = import("Game/PetSelection")
     local Util = import("Core/Util")
     local Maid = import("Core/Maid")
     local GameConstants = import("Game/GameConstants")
@@ -11852,6 +12093,8 @@ __moduleSources["Game/TaskManager"] = function(...)
         self._furniture = deps.furniture
         self._gameData = deps.gameData
         self._farmConfig = deps.farmConfig
+        self._selection = PetSelection.new(deps.gameData, deps.farmConfig)
+        deps.gameData.selection = self._selection
         self._minigame = deps.minigame
         self._hauntlet = deps.hauntlet
         self._nextEventAt = {}
@@ -11876,10 +12119,14 @@ __moduleSources["Game/TaskManager"] = function(...)
         end)
     end
     function TaskManager:_isDoable(entry)
+        if self:_isBlocked(NeedSession.key(entry)) then return false end
         local doneAt = self._completions[NeedSession.key(entry)]
         if doneAt and Util.now() - doneAt < 6 then return false end -- Allow replicated removal to catch up.
-        if entry.owner == "baby" then return self._farmConfig.BabyMode == true end
+        if entry.owner == "baby" then return self._farmConfig.BabyMode == true and self._state:get("ailments.babyKnown") == true end
+        if self._state:get("ailments.petKnown") ~= true then return false end
         if not self._gameData then return false end
+        if self._selection:enabled() and (not self._selection.captured or not self._selection:contains(entry.petUnique)) then return false end
+        if not self._farmConfig.TwoPets and self._selection.captured and tostring(entry.petUnique) ~= self._selection.ids[1] then return false end
         return self._gameData:isPetEquipped(entry.petUnique)
     end
     function TaskManager:_group(kind)
@@ -12012,6 +12259,17 @@ __moduleSources["Game/TaskManager"] = function(...)
             hauntlet = self._hauntlet,
             maid = runMaid,
         }
+        local player = game:GetService("Players").LocalPlayer
+        local character = player and player.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local anchored = root and root.Anchored
+        runMaid:Give(function()
+            if root and root.Parent and player.Character == character then
+                if humanoid then pcall(function() humanoid:MoveTo(root.Position) end) end
+                if root.Anchored ~= anchored then root.Anchored = anchored end
+            end
+        end)
         function context.waitUntil(predicate, seconds)
             local deadline = Util.now() + seconds
             while true do
@@ -12037,9 +12295,6 @@ __moduleSources["Game/TaskManager"] = function(...)
                 running.waiting = isWaiting == true
             end
         end
-        function context.currentGroup(kind)
-            return self:_group(kind)
-        end
         local session = running and running.needSession
         local function rawEntry(kind, owner, unique)
             for _, entry in ipairs(self._state:get("ailments.active", {})) do
@@ -12058,13 +12313,23 @@ __moduleSources["Game/TaskManager"] = function(...)
             local at = self._completions[NeedSession.key(entry)]
             local eligible = self:_isDoable(entry)
             if entry.owner == "baby" then eligible = eligible and self._state:get("player.team") == GameConstants.BabiesTeam end
-            return session:observe(entry, current, at, self._state:get("ailments.known") == true, eligible, Util.now())
+            if entry.owner == "pet" then eligible = eligible and self._petLocator:findModel(entry.petUnique) ~= nil end
+            local destination = GameConstants.LocationForAilment[entry.kind]
+            if destination then eligible = eligible and self._travel:isAt(destination) end
+            local ownerKnown = self._state:get(entry.owner == "baby" and "ailments.babyKnown" or "ailments.petKnown")
+            return session:observe(entry, current, at, self._state:get("ailments.known") == true and ownerKnown == true,
+                eligible, Util.now(), self._state:get("ailments.revision"))
         end
         function context.findEntry(kind, owner, petUnique)
             local current = rawEntry(kind, owner, petUnique)
             local target = session and session.byKey[kind .. "|" .. owner .. "|" .. tostring(petUnique)]
             if target and context.isResolved(target) then return nil end
-            if current then return current end
+            if current then
+                if target and target.createdAt and current.createdAt and target.createdAt ~= current.createdAt then
+                    return table.clone(target) -- A new episode is not the old task's completion.
+                end
+                return current
+            end
             if target then
                 local pending = table.clone(target)
                 pending.rate, pending.inProgress, pending.pendingVerification = 0, false, true
@@ -12110,6 +12375,61 @@ __moduleSources["Game/TaskManager"] = function(...)
         function context.waitForNeed(entry, seconds)
             return context.waitUntil(function() return context.isResolved(entry) end, seconds or 15)
         end
+        function context.restoreDisplacedPet(firstUnique, attemptedUnique)
+            if self._stopped or not self._farmConfig.Enabled or (running and running.cancelled) then return false end
+            local count, known = self._gameData:equippedPetCount()
+            if not known or count ~= 1 or not self._gameData:isPetEquipped(attemptedUnique) then return false end
+            if self._selection:enabled() and not self._selection:isProtected(firstUnique) then return false end
+            local sent = self._interaction:send("EquipItem", firstUnique, { equip_as_last = true })
+            return sent and context.waitUntil(function() return self._gameData:isPetEquipped(firstUnique) end, 8)
+        end
+        function context.recordNeedResult(entry, success)
+            if running then
+                running.needResults = running.needResults or {}
+                running.needResults[NeedSession.key(entry)] = success == true
+            end
+        end
+        function context.confirmReplacement(entry, newKind, afterRevision)
+            if not session or entry.kind ~= "mystery" or not afterRevision then return false end
+            if self._state:get("ailments.petKnown") ~= true or self._state:get("ailments.revision", 0) <= afterRevision then return false end
+            if rawEntry("mystery", entry.owner, entry.petUnique) or not rawEntry(newKind, entry.owner, entry.petUnique) then return false end
+            local key = NeedSession.key(entry)
+            session.resolved[key], session.states[key] = "confirmed mystery replacement", "completed"
+            return true
+        end
+        function context.setPhase(entry, phase)
+            if session then session:setPhase(entry, phase) end
+        end
+        local cleanupActions = { UnequipItem = true, UnfocusPet = true, ExitFurnitureUseStates = true,
+            ExitSeatStates = true, DropPetObject = true, UseTool = true, MinigameLeave = true, UnequipStroller = true }
+        local interaction = self._interaction
+        local proxy = {}
+        context.interaction = setmetatable(proxy, { __index = function(_, name)
+            local method = interaction[name]
+            if type(method) ~= "function" then return method end
+            return function(receiver, ...)
+                local actionName, unique = ...
+                local active = not self._stopped and self._farmConfig.Enabled and not (running and running.cancelled)
+                if not active then
+                    local allowed = running and running.cleaning and name == "send" and cleanupActions[actionName]
+                    if actionName == "UseTool" then local _, _, phase = ...; allowed = allowed and phase == "END" end
+                    if not allowed then return false, "task cancelled" end
+                end
+                if name == "send" and (actionName == "EquipItem" or actionName == "UnequipItem") and self._gameData:hasPet(unique) then
+                    if actionName == "UnequipItem" and self._selection:isProtected(unique) then
+                        return false, "manual pet selection is protected"
+                    elseif actionName == "EquipItem" and self._selection:enabled() then
+                        local ok, reason = self._selection:canEquip(unique)
+                        if not ok then return false, reason end
+                    end
+                end
+                if receiver == proxy then return method(interaction, ...) end
+                return method(receiver, ...)
+            end
+        end })
+        runMaid:Give(function()
+            if self._travel then self._travel:cancelPending() end
+        end)
         return context
     end
     function TaskManager:_start(key, label, taskDefinition, group, isEventJob, side)
@@ -12119,6 +12439,7 @@ __moduleSources["Game/TaskManager"] = function(...)
             return false
         end
         local slot = side and "_side" or "_running"
+        if self[slot] then return false end
         local attempt = (self._failures[key] or 0) + 1
         local runMaid = Maid.new()
         local startedAt = Util.now()
@@ -12159,6 +12480,7 @@ __moduleSources["Game/TaskManager"] = function(...)
                 self:_finish("FAILED", tostring(reason or "unknown reason"), slot)
             end
         end)
+        return true
     end
     function TaskManager:_finish(result, reason, slot)
         slot = slot or "_running"
@@ -12178,7 +12500,9 @@ __moduleSources["Game/TaskManager"] = function(...)
         end
         self._cleanupCount = (self._cleanupCount or 0) + 1
         task.spawn(function()
+            running.cleaning = true
             local ok, err = pcall(running.maid.Clean, running.maid)
+            running.cleaning = false
             self._cleanupCount = math.max(0, self._cleanupCount - 1)
             if not ok then self._logger:warn("Tasks", "Cleanup failed: " .. tostring(err)) end
         end)
@@ -12235,6 +12559,20 @@ __moduleSources["Game/TaskManager"] = function(...)
                 NO_FURNITURE_SKIP_SECONDS / 60, running.label, reason))
             return
         end
+        if running.needSession then
+            for _, entry in ipairs(running.needSession.entries) do
+                local entryKey = NeedSession.key(entry)
+                if not (running.needResults and running.needResults[entryKey]) then
+                    local failures = (self._failures[entryKey] or 0) + 1
+                    self._failures[entryKey] = failures
+                    self._cooldownUntil[entryKey] = Util.now() + math.min(120, self._farmConfig.FailureCooldownSeconds * 2 ^ math.min(failures - 1, 6))
+                else
+                    self._failures[entryKey], self._cooldownUntil[entryKey] = nil, nil
+                end
+            end
+            self._logger:warn("Tasks", tostring(reason or result) .. " (retry scheduled per participant)")
+            return
+        end
         local failures = (self._failures[key] or 0) + 1
         self._failures[key] = failures
         local baseWait = math.max(1, tonumber(self._farmConfig.FailureCooldownSeconds) or 30)
@@ -12262,9 +12600,10 @@ __moduleSources["Game/TaskManager"] = function(...)
         if not self._gameData then
             return
         end
+        self._selection:observe(Util.now())
         local pair = self._gameData:equippedPetList()
         local count, known = self._gameData:equippedPetCount()
-        if known and count == 2 then
+        if known and count == 2 and not self._selection:enabled() then
             self._lastEquippedPair = { pair[1].unique, pair[2].unique }
             self._twoPetRetryAt = nil
             self._disabled.second_pet, self._disabledUntil.second_pet = nil, nil
@@ -12313,7 +12652,7 @@ __moduleSources["Game/TaskManager"] = function(...)
         for key, untilTime in pairs(self._disabledUntil or {}) do
             restMinutes[key] = math.max(0, math.ceil((untilTime - Util.now()) / 60))
         end
-        return { needTarget = self._state:get("farm.needTarget"), lastFailure = self._lastFailure,
+        return { selection = self._selection:status(), needTarget = self._state:get("farm.needTarget"), lastFailure = self._lastFailure,
             pairRetrySeconds = math.max(0, math.ceil((self._twoPetRetryAt or 0) - Util.now())),
             idle = idle, busyMinutes = math.floor((self._busy or 0) / 6 + 0.5) / 10, disabled = disabled,
             restMinutes = restMinutes, retrySeconds = retrySeconds, waitReason = self._why,
@@ -12375,7 +12714,7 @@ __moduleSources["Game/TaskManager"] = function(...)
     -- rejoin after Farm.StuckRejoinSeconds when Farm.AutoRejoin is on. Every step is logged with what was missing.
     function TaskManager:_whiteScreenCheck()
         if self._state:get("session.disconnectReason") ~= nil
-            or (self._running and NEVER_INTERRUPT[self._running.key] and self._running.key ~= "recover") then
+            or self._running ~= nil then
             self._blankSince, self._blankStep = nil, nil
             return false
         end
@@ -12449,7 +12788,7 @@ __moduleSources["Game/TaskManager"] = function(...)
                 self._logger:warn("Hauntlet", "The run ended " .. math.floor(Util.now() - runEndedAt)
                     .. " s ago but the run task is stuck: stopping it")
                 self:_finish("TIMEOUT", "stuck after the run ended")
-            elseif not NEVER_INTERRUPT[self._running.key] and self:_hauntletFirst()
+            elseif not self._running.needSession and not NEVER_INTERRUPT[self._running.key] and self:_hauntletFirst()
                 and self:_hauntletRoundDue(HAUNTLET_INTERRUPT_SECONDS) then
                 self._logger:info("Hauntlet", "Priority interrupt: stopping " .. self._running.label .. " for the Hauntlet run")
                 self:_finish("INTERRUPTED", "Hauntlet run")
@@ -12460,7 +12799,7 @@ __moduleSources["Game/TaskManager"] = function(...)
                 if key == "hauntlet" then
                     self:_start(key, label, taskDef, group, true)
                 end
-            elseif not NEVER_INTERRUPT[self._running.key] and self:_ghostRoundDue(GHOST_INTERRUPT_SECONDS)
+            elseif not self._running.needSession and not NEVER_INTERRUPT[self._running.key] and self:_ghostRoundDue(GHOST_INTERRUPT_SECONDS)
                 and not (self:_hauntletFirst() and self:_hauntletRoundDue(GHOST_INTERRUPT_SECONDS + GHOST_ROUND_BUSY_SECONDS)) then
                 self._logger:info("Ghost", "Priority interrupt: stopping " .. self._running.label .. " for the Ghost Gallery round")
                 self:_finish("INTERRUPTED", "Ghost Gallery round")
@@ -12541,7 +12880,18 @@ __moduleSources["Game/TaskManager"] = function(...)
             return
         end
         local petHold = Util.now() < (self._petHoldUntil or 0) -- 10 s after a Hauntlet interrupt: no equip in between
-        if self._gameData and self._farmConfig.KeepPetEquipped and not petHold then
+        if self._selection:enabled() then
+            local wanted = self._selection:recoveryCandidate(Util.now())
+            if wanted and not self:_isBlocked("equip_pet") then
+                self._selection:beginRecovery(wanted)
+                local first = self._gameData:firstEquippedPet()
+                self:_start("equip_pet", "restore selected pet " .. wanted, first and Tasks.equipSecondPet or Tasks.equipPet,
+                    { petUnique = wanted, firstUnique = first, onOneSlot = function() self._selection.secondBlocked = true end })
+                return
+            end
+            if not self._selection.captured then self._why = "equip your pet(s), then refresh the selection in the HUB" end
+        end
+        if self._gameData and self._farmConfig.KeepPetEquipped and not petHold and not self._selection:enabled() then
             local current = self._gameData:firstEquippedPet()
             local count, known = self._gameData:equippedPetCount()
             local protectedPair = self._farmConfig.KeepEquippedPair ~= false and known and count == 2
@@ -12680,7 +13030,8 @@ __moduleSources["Game/TaskManager"] = function(...)
             -- v2.1.5 (users with the 2-pet perk / Pet Certificate: "it does not equip 2 pets at once"): a second growing
             -- pet next to the first. Found out by trying: when the second equip pushes the first pet out, this account
             -- holds 1 pet, the first one comes back and it is not tried again this session.
-            if self._farmConfig.TwoPets ~= false and Util.now() >= (self._twoPetRetryAt or 0) and known and self._gameData:petInventoryKnown()
+            if self._selection.twoSlotsObserved and not self._selection.secondBlocked
+                and self._farmConfig.TwoPets ~= false and Util.now() >= (self._twoPetRetryAt or 0) and known and self._gameData:petInventoryKnown()
                 and not self:_isBlocked("second_pet") then
                 if count == 2 and skipGrown then
                     for _, pet in ipairs(list) do
@@ -12718,7 +13069,8 @@ __moduleSources["Game/TaskManager"] = function(...)
                     if second then
                         self:_start("second_pet", "equip a second pet", Tasks.equipSecondPet, { petUnique = second,
                             firstUnique = current, onOneSlot = function()
-                                self._twoPetRetryAt = Util.now() + 120
+                                self._selection.secondBlocked = true
+                                self._twoPetRetryAt = math.huge
                             end, onFail = onEquipFail(second) })
                         return
                     end
@@ -12753,7 +13105,8 @@ __moduleSources["Game/TaskManager"] = function(...)
         local multi = self._farmConfig.MultiNeed
         local main = self._running
         local petCount = self._gameData and self._gameData:equippedPetCount() or 0
-        if petCount > 1 or type(multi) ~= "table" or not multi.Enabled or self._side or not main or not main.waiting then
+        if petCount > 1 or type(multi) ~= "table" or not multi.Enabled or self._side or not main or not main.waiting
+            or not main.needSession or not GameConstants.LocationForAilment[main.key] then
             return
         end
         local now = Util.now()
@@ -12894,7 +13247,7 @@ __moduleSources["Game/TaskManager"] = function(...)
                     self._logger:info("Tasks", "Auto Potions: " .. why)
                 end
             end
-            local potionPet = type(potions) == "table" and potions.Enabled and EventTasks.potionTarget(data, self._farmConfig)
+            local potionPet = type(potions) == "table" and potions.Enabled and EventTasks.potionTarget(data, self._farmConfig, self._state)
             if potionPet and dueExtra("age_potion") and data:findItems(GameConstants.ItemCategory,
                 EventTasks.potionList(self._farmConfig, data, EventTasks.petIdle(self._state, potionPet), potionPet))[1] then
                 return "age_potion", "age potion", EventTasks.agePotion, nil
@@ -13082,17 +13435,18 @@ __moduleSources["Game/TaskManager"] = function(...)
             game:GetService("TeleportService"):Teleport(game.PlaceId, Players.LocalPlayer)
         end)
         if not ok then
+            self._rejoinSent = false
             self._logger:warn("Tasks", "Rejoin failed: " .. tostring(err))
         end
     end
     function TaskManager:sendDirect(actionName, ...)
-        if self._running or self._side or self._stopped then
-            return false, "busy"
+        if self._running or self._side or self._stopped or not self._farmConfig.Enabled or (self._cleanupCount or 0) > 0 then
+            return false, "busy or paused"
         end
         return self._interaction:send(actionName, ...)
     end
     function TaskManager:isBusy()
-        return self._running ~= nil or self._side ~= nil
+        return self._running ~= nil or self._side ~= nil or (self._cleanupCount or 0) > 0
     end
     function TaskManager:requestGoHome()
         if self._running and NEVER_INTERRUPT[self._running.key] then
@@ -13219,6 +13573,12 @@ __moduleSources["Game/TaskManager"] = function(...)
         end
         return info
     end
+    function TaskManager:refreshSelection()
+        if self:isBusy() then return false, "Pause e aguarde a limpeza antes de atualizar a seleção" end
+        local ok, reason = self._selection:capture()
+        if ok then self:retryDisabled() end
+        return ok, reason
+    end
     function TaskManager:pause(reason)
         self:_finish("CANCELLED", reason or "farm paused")
         self:_finish("CANCELLED", reason or "farm paused", "_side")
@@ -13333,6 +13693,12 @@ __moduleSources["main"] = function(...)
         if type(previous) == "table" and type(previous.Stop) == "function" then
             pcall(previous.Stop, "replaced by a new execution")
         end
+        local saved = sharedEnvironment.AdoptMeLocalSettings
+        if type(saved) == "table" and launchInfo.settingsSource == "SETTINGS block in this file"
+            and not (type(userConfig) == "table" and type(userConfig.Interface) == "table" and userConfig.Interface.RememberSettings == false) then
+            userConfig = GameData.deepCopy(saved)
+            userConfig.Farm.Enabled = false
+        end
         local config, configWarnings = Config.build(userConfig)
         -- HARD PRIVACY LOCK: cannot be re-enabled by saved config, presets, or loader settings.
         config.Telemetry.Enabled = false
@@ -13345,9 +13711,18 @@ __moduleSources["main"] = function(...)
         config.Farm.Event.HauntletSquadKey = ""
         config.Logging.FileEnabled = false
         config.Logging.SessionFile = false
-        config.Logging.ConsoleLevel = "WARN"
-        config.Interface.RememberSettings = false
         local maid = Maid.new()
+        local aborted = false
+        local boot = { Initializing = true }
+        function boot.Stop()
+            aborted = true
+            config.Farm.Enabled = false
+            maid:Clean()
+            if sharedEnvironment[GLOBAL_KEY] == boot then sharedEnvironment[GLOBAL_KEY] = nil end
+        end
+        sharedEnvironment[GLOBAL_KEY] = boot
+        __startupCleanup = boot.Stop
+        local function checkBoot() assert(not aborted, "startup replaced by another execution") end
         local logger = Logger.new(config.Logging)
         logger.reportHeader = function()
             local executor = "?"
@@ -13433,18 +13808,23 @@ __moduleSources["main"] = function(...)
             end)
             if loadedOk and not isLoaded then
                 logger:info("Game", "Waiting for game:IsLoaded()...")
-                game.Loaded:Wait()
+                local deadline = Util.now() + 120
+                while not game:IsLoaded() and Util.now() < deadline do checkBoot(); task.wait(0.25) end
+                checkBoot()
+                assert(game:IsLoaded(), "game loading exceeded 120 seconds; execute again when ready")
             end
             local ReplicatedStorage = game:GetService("ReplicatedStorage")
             if not ReplicatedStorage:FindFirstChild(GameConstants.Remotes.Folder) then
                 logger:info("Game", "Waiting for the game to finish loading...")
                 local waited = 0
-                while not ReplicatedStorage:FindFirstChild(GameConstants.Remotes.Folder) and waited < 120 do
+                while not ReplicatedStorage:FindFirstChild(GameConstants.Remotes.Folder) and waited < 120 and not aborted do
                     task.wait(1)
                     waited += 1
                 end
             end
+            checkBoot()
             local interaction = Interaction.new(logger, state)
+            maid:Give(function() interaction:destroy() end)
             local localPlayer = game:GetService("Players").LocalPlayer
             local playerGui = type(localPlayer.FindFirstChild) == "function" and localPlayer:FindFirstChild("PlayerGui")
             local function findPlayButton()
@@ -13507,7 +13887,7 @@ __moduleSources["main"] = function(...)
                 local roots = {}
                 for _, child in ipairs(root:GetChildren()) do
                     local okEnabled, enabled = pcall(function()
-                        return child:IsA("ScreenGui") and child.Enabled ~= false
+                        return child:IsA("ScreenGui") and child.Enabled ~= false and not string.find(child.Name, "AdoptMe", 1, true)
                     end)
                     if okEnabled and enabled then
                         table.insert(roots, child)
@@ -13826,7 +14206,7 @@ __moduleSources["main"] = function(...)
                         local root = character and character:FindFirstChild("HumanoidRootPart")
                         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
                         if not (root and humanoid) or root.Anchored or humanoid.Sit or humanoid.SeatPart
-                            or humanoid.Health <= 0 or config.Farm.Enabled == false then
+                            or humanoid.Health <= 0 or config.Farm.Enabled == false or (taskManager and taskManager:isBusy()) then
                             stuckFor = 0
                             return
                         end
@@ -13865,11 +14245,13 @@ __moduleSources["main"] = function(...)
             end))
             local gameData = GameData.new(logger)
             uiGameData = gameData
+            interaction:bindData(gameData, config.Farm)
             telemetry:setGameData(gameData)
             maid:Give(function()
                 gameData:destroy()
             end)
             petLocator = PetLocator.new(gameData)
+            local function setupGame()
             if gameData:start(maid) then
                 PlayerSync.start(maid, state, gameData, petLocator, logger)
                 local tracker = AilmentTracker.new(logger, state, notifier, gameData)
@@ -13906,9 +14288,15 @@ __moduleSources["main"] = function(...)
                 })
                 taskManager:start(maid)
                 state:set("game.ready", true, "main")
+                return true
             else
                 state:set("game.ready", false, "main")
+                return false
             end
+            end
+            maid:Give(task.spawn(function()
+                while not aborted and not setupGame() do task.wait(10) end
+            end))
         end
         local scheduler = Scheduler.new(logger, config.General.TickSeconds)
         scheduler:addJob("LogFlush", config.Logging.FlushSeconds, function()
@@ -13948,15 +14336,13 @@ __moduleSources["main"] = function(...)
                 end
             end, { runImmediately = true })
         end
-        if taskManager then
-            scheduler:addJob("Tasks", TASK_TICK_SECONDS, function()
-                taskManager:tick()
-            end)
-        end
-        if taskManager then
+        scheduler:addJob("Tasks", TASK_TICK_SECONDS, function()
+            if taskManager then taskManager:tick() end
+        end)
+        do
             local lastCashbackAt = Util.now()
             scheduler:addJob("Cashback", CASHBACK_CHECK_SECONDS, function()
-                if not (config.Farm.Enabled and config.Farm.CollectCashback) then
+                if not taskManager or not (config.Farm.Enabled and config.Farm.CollectCashback) then
                     return
                 end
                 if Util.now() - lastCashbackAt < math.max(1, tonumber(config.Farm.CashbackMinutes) or 10) * 60 then
@@ -14053,6 +14439,34 @@ __moduleSources["main"] = function(...)
         end }
         local stopped = false
         api.Config = config
+        local function remember()
+            if config.Interface.RememberSettings then
+                sharedEnvironment.AdoptMeLocalSettings = GameData.deepCopy(config)
+                sharedEnvironment.AdoptMeLocalSettings.Farm.Enabled = false
+            else sharedEnvironment.AdoptMeLocalSettings = nil end
+        end
+        function api.SetSetting(path, value)
+            if stopped then return false, "Script encerrado" end
+            if type(path) ~= "table" or #path < 2 then return false, "Caminho de configuração inválido" end
+            local old = Config.valueAt(config, path)
+            if old == nil or type(old) ~= type(value) then return false, "Tipo ou opção inválida" end
+            if path[1] == "Telemetry" or path[1] == "Notifications" or path[#path] == "HauntletSquad" or path[#path] == "HauntletSquadKey"
+                or path[#path] == "FileEnabled" or path[#path] == "SessionFile" then return false, "Opção desabilitada nesta edição local" end
+            if path[1] == "Farm" and path[2] == "Enabled" then return api.SetFarmEnabled(value) end
+            local proposed = GameData.deepCopy(config)
+            local parent = Config.valueAt(proposed, { table.unpack(path, 1, #path - 1) })
+            parent[path[#path]] = value
+            local valid = Config.build(proposed)
+            if taskManager and path[1] == "Farm" then taskManager:pause("configuration changed") end
+            parent = Config.valueAt(config, { table.unpack(path, 1, #path - 1) })
+            parent[path[#path]] = Config.valueAt(valid, path)
+            remember()
+            return true, "Configuração atualizada"
+        end
+        function api.RefreshSelection()
+            if not taskManager then return false, "Dados do jogo indisponíveis" end
+            return taskManager:refreshSelection()
+        end
         function api.Icons()
             local pet = state:get("pets.equipped", {})[1]
             return {
@@ -14097,6 +14511,7 @@ __moduleSources["main"] = function(...)
                 end)
             end
             return {
+                selection = diagnostics.selection,
                 lastTask = state:get("stats.lastTask"),
                 rustyKeys = keys,
                 twigs = twigs,
@@ -14145,7 +14560,11 @@ __moduleSources["main"] = function(...)
         function api.SetFarmEnabled(enabled)
             if stopped then return false, "Script encerrado; execute o loader novamente" end
             if type(enabled) ~= "boolean" then return false, "Use true ou false" end
+            if enabled and taskManager and taskManager._selection:enabled() and not taskManager._selection.captured then
+                taskManager._selection:capture()
+            end
             config.Farm.Enabled = enabled
+            remember()
             if not enabled and taskManager then taskManager:pause("paused from HUB") end
             return true, enabled and "Farm ligado" or "Farm pausado"
         end
@@ -14218,14 +14637,37 @@ __moduleSources["main"] = function(...)
         function api.TestWebhook()
             return false, "Webhooks permanently disabled in this build"
         end
+        function api.Compatibility()
+            local storage = game:GetService("ReplicatedStorage")
+            local missing, present = {}, 0
+            for name, action in pairs(GameConstants.Actions) do
+                local folderName = action.folder and GameConstants.Remotes[action.folder] or GameConstants.Remotes.Folder
+                local folder = storage:FindFirstChild(folderName)
+                local remote = folder and folder:FindFirstChild(action.remote)
+                if remote and (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then present += 1
+                else table.insert(missing, name .. " -> " .. tostring(folderName) .. "/" .. action.remote) end
+            end
+            table.sort(missing)
+            return {present = present, missing = missing, snapshotSource = uiGameData and uiGameData.SnapshotSource,
+                note = "Presence of a remote does not verify its current arguments or behavior"}
+        end
         function api.ProblemReport()
-            return logger:problemReport() -- Returns text; no clipboard, file or HTTP access.
+            local report = logger:problemReport()
+            local compatibility = api.Compatibility()
+            local status = api.Status()
+            local selected = status.selection and table.concat(status.selection.ids or {}, ", ") or "unknown"
+            return report .. "\n\nCompatibility (read only): " .. compatibility.present .. " known remotes present"
+                .. "\nSnapshot: " .. tostring(compatibility.snapshotSource) .. "\nProtected IDs: " .. selected
+                .. "\nMissing remotes: " .. (#compatibility.missing > 0 and table.concat(compatibility.missing, "\n") or "none")
+                .. "\n" .. compatibility.note
         end
         function api.ApplyPreset(name, focus)
             local values, preset = Config.presetValues(name, focus or config.Farm.Focus)
             if not values then
                 return false, "No preset called " .. tostring(name)
             end
+            if taskManager then taskManager:pause("preset changed") end
+            local preserve = config.Farm.KeepEquippedPair
             for _, entry in ipairs(values) do
                 local parent = Config.valueAt(config, { table.unpack(entry[1], 1, #entry[1] - 1) })
                 if type(parent) == "table" then
@@ -14233,7 +14675,10 @@ __moduleSources["main"] = function(...)
                 end
             end
             config.Preset = preset.id
-            config.Farm.Event.Enabled = preset.id ~= "Off" and preset.id ~= "NeedsOnly"
+            config.Farm.Enabled = false
+            config.Farm.KeepEquippedPair = preserve
+            config.Farm.Event.Enabled = preset.id ~= "Off" and preset.id ~= "NeedsOnly" and preset.id ~= "NeedsStable"
+            remember()
             if config.Farm.Enabled == false and taskManager then taskManager:pause("preset paused the farm") end
             logger:info("Core", "Preset applied: " .. preset.name)
             return true, preset.name
@@ -14242,7 +14687,9 @@ __moduleSources["main"] = function(...)
             if stopped then
                 return
             end
-            stopped = true
+            remember()
+            stopped, aborted = true, true
+            config.Farm.Enabled = false
             reason = tostring(reason or "stopped by user")
             scheduler:stop()
             local window = Interface.current
@@ -14251,6 +14698,9 @@ __moduleSources["main"] = function(...)
             end
             if taskManager then
                 taskManager:stop()
+                local untilAt = Util.now() + 12
+                while (taskManager._cleanupCount or 0) > 0 and Util.now() < untilAt do task.wait(0.1) end
+                if (taskManager._cleanupCount or 0) > 0 then logger:warn("Core", "Cleanup still awaiting a server response") end
             end
             sessionStore:markCleanStop()
             logger:info("Core", "Stopping: " .. reason)
@@ -14269,13 +14719,17 @@ __moduleSources["main"] = function(...)
         end
         function api.OpenInterface()
             if stopped then return false, "Script stopped; run the loader again" end
-            local okUi, uiError = pcall(Interface.start, api, { logger = logger, settings = config.Interface })
+            local okUi, uiResult, uiError = pcall(Interface.start, api, { logger = logger, settings = config.Interface })
+            if okUi and uiResult == nil then return false, uiError end
+            if not okUi then uiError = uiResult end
             if not okUi then
                 logger:warn("Interface", "Window not opened (the farm keeps running): " .. tostring(uiError))
             end
-            return okUi
+            return okUi, uiError
         end
+        checkBoot()
         sharedEnvironment[GLOBAL_KEY] = api
+        __startupCleanup = nil
         if config.Interface.Enabled then
             task.spawn(api.OpenInterface)
         end
@@ -14298,6 +14752,7 @@ local startOk, startError = pcall(function()
     return import("main")(settings, launchInfo)
 end)
 if not startOk then
+    if __startupCleanup then pcall(__startupCleanup) end
     error("[AdoptMe Private] Failed to start: " .. tostring(startError), 0)
 end
 return startError

@@ -1,4 +1,4 @@
--- AdoptMe Local Stable 1.4 | consolidated revision of the supplied 14,303-line source.
+-- AdoptMe Local Stable 1.5 | consolidated revision of the supplied 14,303-line source.
 -- Local execution; no configured Owner/UserId, HTTP, webhook or remote-code dependency.
 -- Starts paused. Equip your pet(s), then enable Farm in the HUB.
 -- Internal game protocols still require live validation; see review/REVISAO.md.
@@ -315,8 +315,8 @@ __moduleSources["Core/Config"] = function(...)
             SpotTravel = "teleport",
             KeepPetEquipped = true,
             GameTravel = true,
-            HomeByRespawn = true,
-            HouseDoorExit = false,
+            HomeByRespawn = false, -- legacy option: normal house entry is mandatory
+            HouseDoorExit = true, -- house -> neighborhood -> main city
             FoodBowlTrip = false,
             SkipFullGrown = true,
             PetOrder = "youngest",
@@ -864,6 +864,8 @@ __moduleSources["Core/Config"] = function(...)
         end
         notifications.MinSecondsBetweenMessages = math.max(1, notifications.MinSecondsBetweenMessages)
         config.General.TickSeconds = math.clamp(config.General.TickSeconds, 0.1, 5)
+        config.Farm.HomeByRespawn = false -- Ignore saved legacy preferences: never reset the character to travel.
+        config.Farm.HouseDoorExit = true
         config.Logging.FlushSeconds = math.clamp(config.Logging.FlushSeconds, 1, 60)
         config.Farm.MaxConsecutiveFailures = math.clamp(math.floor(config.Farm.MaxConsecutiveFailures), 1, 10)
         config.Farm.FailureCooldownSeconds = math.clamp(config.Farm.FailureCooldownSeconds, 1, 120)
@@ -1243,7 +1245,7 @@ __moduleSources["Services/Disclosure"] = function(...)
     local import = ...
     local Config = import("Core/Config")
     local Disclosure = {}
-    Disclosure.VERSION = "Local Stable 1.4 (attached base 2.1.6)"
+    Disclosure.VERSION = "Local Stable 1.5 (attached base 2.1.6)"
     function Disclosure.isAllowedField(field) return false end
     function Disclosure.featureSummary(config)
         local on, total = Config.countFeatures(config)
@@ -1257,7 +1259,7 @@ __moduleSources["Services/Disclosure"] = function(...)
     end
     function Disclosure.buildStartLines(config, files, webhook, telemetry, launch)
         return {
-            "AdoptMe Local Stable 1.4 | source from attached Adopt Victims base 2.1.6",
+            "AdoptMe Local Stable 1.5 | source from attached Adopt Victims base 2.1.6",
             "External HTTP: disabled (no request function, no game:HttpGet, no loadstring)",
             "External UI library: removed; Roblox-native local interface",
             "Remote notifications/telemetry/squad relay: disabled",
@@ -2514,8 +2516,9 @@ __moduleSources["Services/Interface"] = function(...)
         toggle("Settings", "Aceitar menu inicial", "Fecha o menu Play quando o farm estiver ligado.", {"Farm", "AutoAcceptMenu"})
         toggle("Settings", "Fechar diálogos", "Diálogos reconhecidos do jogo.", {"Farm", "AutoCloseDialogs"})
         toggle("Settings", "Viagem pelo módulo do jogo", "InteriorsM quando disponível.", {"Farm", "GameTravel"})
-        toggle("Settings", "Voltar por respawn", "Retorno para casa; sujeito à confirmação de chegada.", {"Farm", "HomeByRespawn"})
-        toggle("Settings", "Sair pela porta da casa", "Usa a porta conhecida da própria casa.", {"Farm", "HouseDoorExit"})
+        action("Settings", "Viagem sem reset", "Casa → vizinhança → cidade → porta do destino. Retorno sem respawn.", function()
+            return true, "Viagens por portas; piso confirmado e apoio temporário contra quedas."
+        end)
         toggle("Settings", "Viajar para tigela", "Autoriza voltar para casa para alimentar.", {"Farm", "FoodBowlTrip"})
         toggle("Settings", "Reconectar automaticamente", "Reentra após falha prolongada, quando habilitado.", {"Farm", "AutoRejoin"})
         toggle("Settings", "Ajustar câmera", "Afasta a câmera quando presa no personagem.", {"Farm", "CameraGuard"})
@@ -2796,6 +2799,39 @@ __moduleSources["Game/GameConstants"] = function(...)
         HauntedManor = { door = "MainDoor", spawn = nil },
         TheCrypt = { door = "MainDoor", spawn = nil },
         HauntedHotel = { door = "MainDoor", spawn = nil },
+    }
+    -- Coordinates from supplied XML: prefetch hints ONLY. Every crossing still requires its live door.
+    GameConstants.TravelStreamHints = {
+        MainMap = {
+            AFKZone = Vector3.new(-1.060724, 225.859924, -0.476261),
+            AutoShop = Vector3.new(-47.875854, 31.152748, -1753.772583),
+            BabyShop = Vector3.new(-468.813446, 31.671501, -1668.677734),
+            BeachShop = Vector3.new(-716.995911, 27.890251, -1438.431763),
+            CampingShop = Vector3.new(-64.106560, 33.888176, -1183.995605),
+            CatCafe = Vector3.new(-14.426981, 32.030346, -1647.773560),
+            Cave = Vector3.new(-250.424881, 29.464592, -1645.655762),
+            CoffeeShop = Vector3.new(-276.171997, 31.105827, -1770.177856),
+            DebugInterior = Vector3.new(-1.060724, 223.859924, -0.476261),
+            HatShop = Vector3.new(-525.781799, 37.793865, -1308.670532),
+            HauntedHotel = Vector3.new(-308.099121, 33.647285, -1419.082275),
+            HauntedManor = Vector3.new(-271.259003, 94.725632, -1102.953857),
+            Hospital = Vector3.new(-205.352524, 32.089848, -1536.464478),
+            IceCream = Vector3.new(-218.577606, 34.297012, -1774.354858),
+            Neighborhood = Vector3.new(-255.096207, 36.209099, -1832.578735),
+            Nursery = Vector3.new(-244.290726, 32.626022, -1474.407471),
+            Obbies = Vector3.new(-464.683960, 32.887390, -1823.499023),
+            PetShop = Vector3.new(-185.120895, 32.669109, -1512.191772),
+            PizzaShop = Vector3.new(-119.818581, 30.879934, -1663.734009),
+            Portal = Vector3.new(-249.399384, 34.164021, -1500.888184),
+            SafetyHub = Vector3.new(-500.091827, 33.360893, -1198.322266),
+            Salon = Vector3.new(-132.087402, 32.431572, -1768.400146),
+            School = Vector3.new(-312.581421, 32.109123, -1506.915771),
+            SkyCastle = Vector3.new(-222.226578, 366.421539, -1350.972778),
+            Supermarket = Vector3.new(-394.851654, 31.523064, -1200.463745),
+            TheCrypt = Vector3.new(-337.640137, 37.066628, -1181.633911),
+            ToyShop = Vector3.new(-88.556580, 34.227211, -1706.538086),
+        },
+        Neighborhood = { MainMap = Vector3.new(-9101.707031, 10226.072266, 3043.519531) },
     }
     GameConstants.CharWrapperPlaces = { TheCrypt = true }
     GameConstants.InteriorTalkForAilment = {
@@ -4117,7 +4153,7 @@ __moduleSources["Game/Interaction"] = function(...)
         table.insert(lines, "LOCAL click on the main menu Play button and then HOME in \"Choose Location!\" — only on the menu (Farm.AutoAcceptMenu)")
         table.insert(lines, "LOCAL call of the game's OWN travel function (InteriorsM.enter, the one every door uses): it sends the game's own door / location requests (Farm.GameTravel); also to visit other players' houses for the \"Visit player homes\" quests (Farm.Event.HouseVisits)")
         table.insert(lines, "LOCAL walking of your character in long diagonal legs (~30 studs) — ONLY for the walk need (and ride); if the game left it anchored on solid ground, it is un-anchored first")
-        table.insert(lines, "LOCAL teleport of your character next to the Stray Cat (Halloween map), into the Ghost Gallery join circle in the Haunted Manor (where the popup's Yes puts you) and, inside the minigame only, 50 studs under the ghost it vacuums (held every frame, back on the floor after the round) (Farm.Event)")
+        table.insert(lines, "LOCAL teleport of your character next to the Stray Cat (Halloween map), into the Ghost Gallery join circle in the Haunted Manor (where the popup's Yes puts you) and, inside the minigame only, next to its vacuum target on a confirmed floor (Farm.Event)")
         table.insert(lines, "LOCAL teleport of your character into the selected door's join circle inside the Hauntlet rooms, requesting nearby room streaming when needed (Farm.Event.Hauntlet)")
         table.insert(lines, "LOCAL virtual click — only when Roblox says you are idle, to avoid the 20-minute kick (Farm.AntiAfk)")
         table.insert(lines, "ROBLOX rejoin of a server of this game (TeleportService) — only after 3 min with no place / no character, e.g. a white screen in a dead minigame (Farm.AutoRejoin)")
@@ -4180,139 +4216,63 @@ __moduleSources["Game/Interaction"] = function(...)
     end
     function Interaction:teleportTo(spotName)
         local spot = GameConstants.Spots[spotName]
-        if not spot then
-            error("Interaction: spot is not in the allowlist: " .. tostring(spotName), 2)
+        if not spot then return false, "unknown destination spot: " .. tostring(spotName) end
+        local Safety = import("Game/TravelSafety")
+        self._travelSafety = self._travelSafety or Safety.new(self._logger, self._state)
+        if not self._travelSafety:ready("MainMap") then
+            return false, "leave through the house and neighborhood doors before moving to an outdoor spot"
         end
-        local player = game:GetService("Players").LocalPlayer
-        local character = player.Character
-        local root = character and character:FindFirstChild("HumanoidRootPart")
-        if not root then
-            return false, "no character"
+        local moved, reason = self._travelSafety:move(Vector3.new(spot.x, spot.y, spot.z), "MainMap", 16)
+        if moved then
+            self._sent += 1
+            self._state:set("farm.actionsSent", self._sent, "Interaction")
         end
-        self._sent += 1
-        self._state:set("farm.actionsSent", self._sent, "Interaction")
-        local waited = 0
-        while root.Anchored and waited < 10 do
-            task.wait(0.5)
-            waited += 0.5
-        end
-        local canCheck = true
-        local function groundY()
-            local y
-            local ok = pcall(function()
-                local params = RaycastParams.new()
-                params.FilterType = Enum.RaycastFilterType.Exclude
-                params.FilterDescendantsInstances = { character }
-                local hit = workspace:Raycast(Vector3.new(spot.x, spot.y + 60, spot.z), Vector3.new(0, -200, 0), params)
-                y = hit and hit.Position.Y
-            end)
-            canCheck = ok
-            return y
-        end
-        -- v2.1.5: at most 3 s for the stream (a stuck stream = white screen never answered and held the task)
-        local streamDone = false
-        local streamed = true
-        task.spawn(function()
-            streamed = pcall(function()
-                player:RequestStreamAroundAsync(Vector3.new(spot.x, spot.y, spot.z), 15)
-            end)
-            streamDone = true
-        end)
-        local streamUntil = os.clock() + 3
-        while not streamDone and os.clock() < streamUntil do
-            task.wait(0.1)
-        end
-        self._logger:debug("Action", "Stream around " .. spotName .. ": " .. (streamed and "requested" or "not available"))
-        local ground = groundY()
-        for attempt = 1, 3 do
-            local ok, err = pcall(function()
-                character:PivotTo(CFrame.new(spot.x, ground and (ground + 3) or (spot.y + 2), spot.z))
-            end)
-            if not ok then
-                return false, tostring(err)
-            end
-            task.wait(2)
-            local p = root.Position
-            if math.abs(p.X - spot.x) < 25 and math.abs(p.Z - spot.z) < 25 then
-                if not ground and canCheck then
-                    local seconds = 0
-                    while not ground and seconds < 20 do
-                        task.wait(1)
-                        seconds += 1
-                        ground = groundY()
-                    end
-                    if not ground then
-                        return false, "the map at " .. spotName .. " did not load within 20 s"
-                    end
-                    self._logger:debug("Action", string.format("Map at %s loaded after %d s: standing on it", spotName, seconds))
-                    pcall(function()
-                        character:PivotTo(CFrame.new(spot.x, ground + 3, spot.z))
-                    end)
-                elseif ground then
-                    self._logger:debug("Action", string.format("Ground at %s: y=%.1f (recorded %.1f)", spotName, ground, spot.y))
-                end
-                return true
-            end
-            self._logger:debug("Action", string.format("Teleport to %s undone (now at %.0f, %.0f), try %d", spotName, p.X, p.Z, attempt))
-        end
-        return false, "the game moved the character back"
+        return moved, reason
     end
     -- v2.1.4 Auto Skelicorn: stand next to a part found in the map (the lever machine by the Manor)
+    function Interaction:protectTransition(seconds)
+        local Safety = import("Game/TravelSafety")
+        self._travelSafety = self._travelSafety or Safety.new(self._logger, self._state)
+        local job, reason = self._travelSafety:begin(math.clamp(tonumber(seconds) or 35, 5, 90))
+        return job ~= nil, reason
+    end
     function Interaction:teleportNearPart(part, studs)
         local player = game:GetService("Players").LocalPlayer
         local character = player and player.Character
         local root = character and character:FindFirstChild("HumanoidRootPart")
-        if not (root and part and part.Parent) then
-            return false, "no character / part"
-        end
-        local waited = 0
-        while root.Anchored and waited < 10 do
-            task.wait(0.5)
-            waited += 0.5
-        end
+        if not (root and part and part.Parent and part:IsA("BasePart")) then return false, "no character / part" end
+        local Safety = import("Game/TravelSafety")
+        self._travelSafety = self._travelSafety or Safety.new(self._logger, self._state)
+        local destination = Safety.placeName(self._state:get("player.interior"))
+        local offset = math.clamp(tonumber(studs) or 6, 2, 20)
         local away = (root.Position - part.Position) * Vector3.new(1, 0, 1)
         local dir = away.Magnitude > 1 and away.Unit or Vector3.new(0, 0, 1)
-        local goal = part.Position + dir * (studs or 6) + Vector3.new(0, 3, 0)
-        self._sent += 1
-        self._state:set("farm.actionsSent", self._sent, "Interaction")
-        local ok, err = pcall(function()
-            character:PivotTo(CFrame.lookAt(goal, Vector3.new(part.Position.X, goal.Y, part.Position.Z)))
-        end)
-        if not ok then
-            return false, tostring(err)
+        local goal = part.Position + dir * offset + Vector3.new(0, 3, 0)
+        local moved, reason = self._travelSafety:move(goal, destination, 12)
+        if moved then
+            self._sent += 1
+            self._state:set("farm.actionsSent", self._sent, "Interaction")
         end
-        task.wait(1)
-        return (root.Position - part.Position).Magnitude < (studs or 6) + 15, "moved back by the game"
+        return moved, reason
     end
     function Interaction:teleportToJoinZone()
         local E = GameConstants.Event
-        local function find(path)
-            local node = workspace
-            for _, name in ipairs(path) do
-                node = node and node:FindFirstChild(name)
-            end
-            return node
+        local Safety = import("Game/TravelSafety")
+        self._travelSafety = self._travelSafety or Safety.new(self._logger, self._state)
+        local safety = self._travelSafety
+        if not safety:ready("HauntedManor") then return false, "Manor lobby floor not ready" end
+        local spot = workspace
+        for _, name in ipairs(E.JoinZoneTeleportPath) do spot = spot and spot:FindFirstChild(name) end
+        if not spot or not spot:IsA("BasePart") then
+            local scene = safety:sceneRoot("HauntedManor")
+            local zone = scene and scene:FindFirstChild("GhostClustersMinigameJoinZone", true)
+            spot = zone and (zone:IsA("BasePart") and zone or zone:FindFirstChildWhichIsA("BasePart", true))
         end
-        local spot = find(E.JoinZoneTeleportPath)
-        local character = game:GetService("Players").LocalPlayer.Character
-        local root = character and character:FindFirstChild("HumanoidRootPart")
-        if not spot or not spot:IsA("BasePart") or not root then
-            return false, not spot and "join circle spot not found" or "no character"
-        end
-        self._sent += 1
-        self._state:set("farm.actionsSent", self._sent, "Interaction")
-        local ok, err = pcall(function()
-            local p = spot.Position
-            character:PivotTo(CFrame.new(p.X, p.Y + 1.5, p.Z))
-        end)
-        if not ok then
-            return false, tostring(err)
-        end
-        local now = root.Position
-        local dx, dz = now.X - spot.Position.X, now.Z - spot.Position.Z
-        return math.sqrt(dx * dx + dz * dz) <= E.JoinZoneRadius, "not in the circle after the teleport"
+        if not spot then return false, "live Ghost Gallery join circle unavailable" end
+        return safety:move(spot.Position + Vector3.new(0, 3, 0), "HauntedManor", 10)
     end
     function Interaction:teleportToHauntletJoinZone()
+        self:protectTransition(65)
         local Players = game:GetService("Players")
         local player = Players.LocalPlayer
         local character = player and player.Character
@@ -4871,6 +4831,7 @@ __moduleSources["Game/Interaction"] = function(...)
     -- pick in this room), bad = { [part] = true } (parts that proved to be another door) }.
     -- Returns moved, how, part, circles, verified.
     function Interaction:teleportToHauntletDoor(interiorName, doorIndex, options)
+        self:protectTransition(40)
         options = options or {}
         if type(doorIndex) ~= "number" or doorIndex < 1 or doorIndex > 4 then
             return false, "door index out of range: " .. tostring(doorIndex)
@@ -5004,104 +4965,56 @@ __moduleSources["Game/Interaction"] = function(...)
         return true, how, part, circles, verified
     end
     function Interaction:keepNear(provider)
-        local stats = { corrections = 0 }
-        local running = true
-        local players = game:GetService("Players")
-        local function myRoot()
-            local character = players.LocalPlayer.Character
-            return character and character:FindFirstChild("HumanoidRootPart"), character
-        end
-        local startRoot = myRoot()
-        local startSpot = startRoot and startRoot.Position or nil
-        local lastSpot = nil
-        local released = false
-        local function hold(spot)
-            local root, character = myRoot()
-            if not root or released then
-                return
-            end
-            local here = root.Position
-            local fx, fy, fz = here.X - spot.X, here.Y - spot.Y, here.Z - spot.Z
-            if fx * fx + fy * fy + fz * fz > 250 * 250 then
-                released = true
-                return
-            end
-            pcall(function()
-                root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-            end)
-            local now = root.Position
-            local dx, dy, dz = now.X - spot.X, now.Y - spot.Y, now.Z - spot.Z
-            if dx * dx + dy * dy + dz * dz <= 1 then
-                return
-            end
-            if pcall(function()
-                character:PivotTo(CFrame.new(spot.X, spot.Y, spot.Z))
-            end) then
-                stats.corrections += 1
-            end
-        end
+        local Safety = import("Game/TravelSafety")
+        self._travelSafety = self._travelSafety or Safety.new(self._logger, self._state)
+        local safety = self._travelSafety
+        local player = game:GetService("Players").LocalPlayer
+        local character = player.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local scene = self._state:get("player.interior")
+        local stats, running = { corrections = 0, noFloor = 0 }, root ~= nil and humanoid ~= nil
+        local watcher
+        if running then safety:begin(260) end
         local function step()
+            if not running or player.Character ~= character or not root.Parent or humanoid.Health <= 0
+                or self._state:get("player.interior") ~= scene or root.Anchored then return false end
             local position, mode = provider()
-            if position == false then
-                released = true
-                return
-            end
-            if position ~= nil and type(position.X) == "number" and type(position.Y) == "number" and type(position.Z) == "number" then
-                if mode == "below" then
-                    lastSpot = Vector3.new(position.X, position.Y - GameConstants.Event.HoldBelowStuds, position.Z)
-                else
-                    local root = myRoot()
-                    local from = root and root.Position or position
-                    local off = tonumber(mode) or 10
-                    local dx, dz = from.X - position.X, from.Z - position.Z
-                    local length = math.sqrt(dx * dx + dz * dz)
-                    local x = length > 0.1 and position.X + dx / length * off or position.X + off
-                    local z = length > 0.1 and position.Z + dz / length * off or position.Z
-                    lastSpot = Vector3.new(x, startSpot and startSpot.Y or from.Y, z)
-                end
-            end
-            if lastSpot then
-                hold(lastSpot)
-            end
-        end
-        local connection
-        local okSignal = pcall(function()
-            connection = game:GetService("RunService").Heartbeat:Connect(function()
-                if running then
-                    step()
+            if position == false then running = false; return false end
+            if not position then return false end
+            local offset = math.clamp(tonumber(mode) or 6, 3, 12)
+            local direction = (root.Position - position) * Vector3.new(1, 0, 1)
+            direction = direction.Magnitude > 0.1 and direction.Unit or Vector3.new(0, 0, 1)
+            local horizontal = position + direction * offset
+            -- Stay on a real nearby floor; never place the avatar 50 studs below a ghost/in the void.
+            local probe = Vector3.new(horizontal.X, root.Position.Y, horizontal.Z)
+            local floor = safety:ground(probe, character, 30, 6)
+            if not floor then stats.noFloor += 1; return false end
+            local height = math.clamp((humanoid.HipHeight or 2) + root.Size.Y / 2, 2, 6) + 0.15
+            local goal = Vector3.new(horizontal.X, floor.Position.Y + height, horizontal.Z)
+            if (root.Position - goal).Magnitude > 250 then return false end
+            local ok = pcall(function()
+                root.AssemblyLinearVelocity = Vector3.zero
+                if (root.Position - goal).Magnitude > 1 then
+                    safety:_support(goal, root, humanoid)
+                    if safety._job then safety._job.heldY, safety._job.position = goal.Y, goal end
+                    character:PivotTo(CFrame.lookAt(goal, Vector3.new(position.X, goal.Y, position.Z)))
+                    stats.corrections += 1
                 end
             end)
-        end)
-        if not okSignal or not connection then
-            task.spawn(function()
-                while running do
-                    step()
-                    task.wait(0.05)
-                end
+            return ok
+        end
+        if running then
+            watcher = task.spawn(function()
+                while running do step(); task.wait(0.1) end
             end)
         end
-        local function stop(back)
-            if not running then
-                return
-            end
-            running = false
-            if connection then
-                connection:Disconnect()
-                connection = nil
-            end
-            local root, character = myRoot()
-            local stillHeld = false
-            if root and lastSpot and not released then
-                local here = root.Position
-                local dx, dy, dz = here.X - lastSpot.X, here.Y - lastSpot.Y, here.Z - lastSpot.Z
-                stillHeld = dx * dx + dy * dy + dz * dz <= 30 * 30
-            end
-            if back ~= false and stillHeld and startSpot then
-                pcall(function()
-                    root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                    character:PivotTo(CFrame.new(startSpot.X, startSpot.Y + 2, startSpot.Z))
-                end)
-            end
+        local stopped = false
+        local function stop()
+            if stopped then return end
+            stopped, running = true, false
+            if watcher then pcall(task.cancel, watcher); watcher = nil end
+            safety:cancel()
         end
         return stop, stats, step
     end
@@ -5489,349 +5402,474 @@ __moduleSources["Game/Interaction"] = function(...)
     end
     return Interaction
 end
+__moduleSources["Game/TravelSafety"] = function(...)
+    local import = ...
+    local Util = import("Core/Util")
+    local Players = game:GetService("Players")
+    local Safety = {}
+    Safety.__index = Safety
+
+    function Safety.placeName(value)
+        return type(value) == "string" and string.match(value, "^[^!]+") or nil
+    end
+    local function characterParts()
+        local character = Players.LocalPlayer and Players.LocalPlayer.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if not root or not root.Parent or not humanoid or humanoid.Health <= 0 then return nil end
+        return character, root, humanoid
+    end
+    function Safety.new(logger, state)
+        local shared = Util.getSharedEnvironment()
+        shared.AdoptMeTravelSupport = shared.AdoptMeTravelSupport or {}
+        return setmetatable({ _logger = logger, _state = state, _shared = shared.AdoptMeTravelSupport }, Safety)
+    end
+    function Safety:sceneRoot(destination)
+        if destination == "housing" then return workspace:FindFirstChild("HouseInteriors") end
+        local interiors = workspace:FindFirstChild("Interiors")
+        if interiors then
+            local current = self._state:get("player.interior")
+            local exact = type(current) == "string" and interiors:FindFirstChild(current)
+            if exact and Safety.placeName(exact.Name) == destination then return exact end
+            for _, scene in ipairs(interiors:GetChildren()) do
+                if Safety.placeName(scene.Name) == destination then return scene end
+            end
+        end
+        return nil
+    end
+    function Safety:ground(position, character, depth, rise)
+        local ok, hit = pcall(function()
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Exclude
+            local exclude = { character }
+            if self._shared.part then table.insert(exclude, self._shared.part) end
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player.Character and player.Character ~= character then table.insert(exclude, player.Character) end
+            end
+            local pets = workspace:FindFirstChild("Pets")
+            if pets then table.insert(exclude, pets) end
+            params.FilterDescendantsInstances = exclude
+            params.RespectCanCollide = true
+            params.IgnoreWater = true
+            local _, root = characterParts()
+            if root then params.CollisionGroup = root.CollisionGroup end
+            return workspace:Raycast(position + Vector3.new(0, rise or 0, 0), Vector3.new(0, -(depth or 12), 0), params)
+        end)
+        if not ok then return nil, "ground probe unavailable" end
+        if hit and hit.Normal.Y >= 0.5 then return hit end
+        return nil, "solid floor not loaded"
+    end
+    function Safety:ready(destination)
+        local character, root = characterParts()
+        if not root or root.Anchored then return false end
+        if Safety.placeName(self._state:get("player.interior")) ~= destination then return false end
+        local scene = self:sceneRoot(destination)
+        if not scene then return false end
+        local hit = self:ground(root.Position, character, 9)
+        if not hit then return false end
+        if hit.Instance:IsDescendantOf(scene) then return true end
+        -- Terrain is global; also require the outdoor scene and its observed coordinate area.
+        if hit.Instance:IsA("Terrain") and destination == "MainMap" then
+            return root.Position.Y > -30 and root.Position.Y < 600
+                and root.Position.X > -1500 and root.Position.X < 1000 and root.Position.Z > -3000 and root.Position.Z < 0
+        end
+        return false
+    end
+    local function clearance(root, humanoid)
+        return math.clamp((tonumber(humanoid.HipHeight) or 2) + root.Size.Y / 2, 2, 6) + 0.15
+    end
+    function Safety:_support(position, root, humanoid)
+        local part = self._shared.part
+        if not part or not part.Parent then
+            part = Instance.new("Part")
+            part.Name = "AdoptMe_LocalTravelSupport"
+            part.Anchored = true
+            part.Size = Vector3.new(18, 1, 18)
+            part.Transparency = 0.65
+            part.CanCollide = true
+            part.CanTouch = false
+            part:SetAttribute("AdoptMeLocalTravelSupport", true)
+            self._shared.part = part
+        end
+        part.CollisionGroup = root.CollisionGroup
+        part.CFrame = CFrame.new(position - Vector3.new(0, clearance(root, humanoid) + 0.5, 0))
+        part.Parent = workspace
+    end
+    function Safety:_removeSupportIfSafe()
+        local part = self._shared.part
+        if not part then return end
+        local character, root = characterParts()
+        local movedAway = root and (math.abs(root.Position.X - part.Position.X) > 12
+            or math.abs(root.Position.Z - part.Position.Z) > 12 or math.abs(root.Position.Y - part.Position.Y) > 20)
+        if not root or movedAway or self:ground(root.Position, character, 9) then
+            part:Destroy()
+            self._shared.part = nil
+        end
+        -- With no real floor, retain ONE static support rather than drop the player on pause.
+        -- It is reused/removed by the next trip. No loop, anchor or connection is retained.
+    end
+    function Safety:requestStream(position, seconds)
+        if self._streamThread then pcall(task.cancel, self._streamThread) end
+        self._streamThread = task.spawn(function()
+            pcall(function() Players.LocalPlayer:RequestStreamAroundAsync(position, seconds or 8) end)
+        end)
+    end
+    local function placeRoot(character, root, position)
+        character:PivotTo(character:GetPivot() + (position - root.Position))
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+    end
+    function Safety:begin(seconds)
+        self:cancel()
+        local character, root, humanoid = characterParts()
+        if not root then return nil, "character unavailable" end
+        local job = { character = character, root = root, humanoid = humanoid,
+            position = root.Position, heldY = root.Position.Y, deadline = Util.now() + (seconds or 30) }
+        self._job = job
+        self:_support(root.Position, root, humanoid)
+        self._watch = task.spawn(function()
+            while self._job == job and Util.now() < job.deadline do
+                if Players.LocalPlayer.Character ~= character or not root.Parent or humanoid.Health <= 0 then break end
+                local p = root.Position
+                local delta = p - job.position
+                if Vector3.new(delta.X, 0, delta.Z).Magnitude > 30 or math.abs(delta.Y) > 45 then
+                    -- A game door changed coordinate spaces. Support the NEW space, never snap back to the old one.
+                    job.heldY = p.Y
+                    self:requestStream(p, 8)
+                end
+                if self:ground(p, character, 9) then
+                    job.heldY = p.Y
+                elseif not root.Anchored then
+                    local hold = Vector3.new(p.X, job.heldY, p.Z)
+                    self:_support(hold, root, humanoid)
+                    if p.Y < job.heldY - 1 then placeRoot(character, root, hold) end
+                end
+                job.position = root.Position
+                task.wait(0.05)
+            end
+            if self._job == job then self._job = nil; self:_removeSupportIfSafe() end
+        end)
+        return job
+    end
+    function Safety:cancel()
+        self._job = nil
+        if self._watch then pcall(task.cancel, self._watch); self._watch = nil end
+        if self._streamThread then pcall(task.cancel, self._streamThread); self._streamThread = nil end
+        self:_removeSupportIfSafe()
+    end
+    function Safety:move(position, destination, seconds)
+        if not self:ready(destination) then return false, "destination scene and solid floor are not confirmed: " .. tostring(destination) end
+        local character, root, humanoid = characterParts()
+        local origin = root.Position
+        local job, reason = self:begin((seconds or 16) + 3)
+        if not job then return false, reason end
+        local function rollback()
+            if self._job ~= job or Players.LocalPlayer.Character ~= character then return end
+            if Safety.placeName(self._state:get("player.interior")) == destination and self:ground(origin, character, 9) then
+                self:_support(origin, root, humanoid)
+                placeRoot(character, root, origin)
+            end
+        end
+        self:requestStream(position, seconds or 16)
+        -- Stream prefetch can return before collision exists. The support must exist BEFORE PivotTo.
+        local hit = self:ground(position, character, 32, 5)
+        local target = Vector3.new(position.X, hit and hit.Position.Y + clearance(root, humanoid) or position.Y, position.Z)
+        self:_support(target, root, humanoid)
+        job.heldY, job.position = target.Y, target
+        local moved, moveError = pcall(placeRoot, character, root, target)
+        if not moved then rollback(); self:cancel(); return false, tostring(moveError) end
+        local stableSince
+        local deadline = Util.now() + (seconds or 16)
+        while self._job == job and Util.now() < deadline do
+            if Players.LocalPlayer.Character ~= character or not root.Parent or humanoid.Health <= 0 then
+                self:cancel(); return false, "character changed during travel"
+            end
+            if Safety.placeName(self._state:get("player.interior")) ~= destination then
+                self:cancel(); return false, "scene changed during movement"
+            end
+            local near = (Vector3.new(root.Position.X, 0, root.Position.Z) - Vector3.new(target.X, 0, target.Z)).Magnitude < 12
+            local floor = self:ground(target, character, 32, 5)
+            if near and floor and not root.Anchored then
+                local landed = Vector3.new(target.X, floor.Position.Y + clearance(root, humanoid), target.Z)
+                if math.abs(root.Position.Y - landed.Y) > 1 then
+                    self:_support(landed, root, humanoid)
+                    job.heldY, job.position = landed.Y, landed
+                    placeRoot(character, root, landed)
+                end
+                if self:ready(destination) then
+                    stableSince = stableSince or Util.now()
+                    if Util.now() - stableSince >= 0.75 then self:cancel(); return true end
+                else stableSince = nil end
+            else stableSince = nil end
+            task.wait(0.1)
+        end
+        if self._job == job then rollback(); self:cancel() end
+        return false, "solid destination floor did not load, movement cancelled"
+    end
+    return Safety
+end
+
 __moduleSources["Game/Travel"] = function(...)
     local import = ...
     local Util = import("Core/Util")
     local GameConstants = import("Game/GameConstants")
+    local Safety = import("Game/TravelSafety")
     local Players = game:GetService("Players")
     local Travel = {}
     Travel.__index = Travel
-    local DOOR_TO_LOCATION_DELAY = 1
-    local ARRIVAL_TIMEOUT_SECONDS = 12
+    local ARRIVAL_TIMEOUT = 22
+
     function Travel.new(logger, state, interaction, farmConfig)
-        return setmetatable({ _logger = logger, _state = state, _interaction = interaction, _farmConfig = farmConfig }, Travel)
+        local safety = interaction._travelSafety or Safety.new(logger, state)
+        interaction._travelSafety = safety
+        return setmetatable({ _logger = logger, _state = state, _interaction = interaction,
+            _farmConfig = farmConfig or {}, _safety = safety, _generation = 0 }, Travel)
     end
     function Travel:canGoTo(destination)
-        return GameConstants.Travel[destination] ~= nil
+        return destination == "Neighborhood" or GameConstants.Travel[destination] ~= nil
     end
     function Travel:isAt(destination)
-        local interior = self._state:get("player.interior")
-        return type(interior) == "string" and string.sub(interior, 1, #destination) == destination
-    end
-    function Travel:exitToMainMap()
         local place = self._state:get("player.interior")
-        if type(place) ~= "string" or not GameConstants.Travel[place] or place == "MainMap" then
-            return false, "not in a building"
+        local event = GameConstants.Event
+        if destination == event.MinigameInteriorPrefix or destination == event.HauntletInteriorPrefix then
+            return type(place) == "string" and string.sub(place, 1, #destination) == destination
         end
-        self._logger:info("Travel", "Leaving " .. place .. " through its door")
-        local ok, reason = self._interaction:send("DoorEnter", "MainMap", place .. "/MainDoor", { start_transparency = 1 })
-        if not ok then
-            return false, "door enter failed: " .. tostring(reason)
-        end
-        task.wait(DOOR_TO_LOCATION_DELAY)
-        ok, reason = self._interaction:send("SetLocation", "MainMap", nil, "Default")
-        if not ok then
-            return false, "set location failed: " .. tostring(reason)
-        end
-        local deadline = Util.now() + ARRIVAL_TIMEOUT_SECONDS
-        while Util.now() < deadline do
-            if self:isAt("MainMap") then
-                self._logger:info("Travel", "Arrived: MainMap (from " .. place .. ")")
-                return true
-            end
-            task.wait(0.25)
-        end
-        return false, "still in " .. tostring(self._state:get("player.interior"))
-    end
-    function Travel:exitHouse()
-        local me = Players.LocalPlayer
-        local blueprint = workspace:FindFirstChild("HouseInteriors")
-        blueprint = blueprint and blueprint:FindFirstChild("blueprint")
-        local mine = blueprint and blueprint:FindFirstChild(me.Name)
-        local doors = mine and mine:FindFirstChild("Doors")
-        local door = doors and doors:FindFirstChild("MainDoor")
-        if not door then
-            return false, "house door not found (workspace.HouseInteriors.blueprint." .. me.Name .. ".Doors.MainDoor)"
-        end
-        local offset
-        pcall(function()
-            local root = me.Character and me.Character:FindFirstChild("HumanoidRootPart")
-            local camera = workspace.CurrentCamera
-            if root and camera then
-                offset = root.CFrame:ToObjectSpace(camera.CFrame)
-            end
-        end)
-        if not offset then
-            local c = GameConstants.HouseExitCameraOffset
-            pcall(function()
-                offset = CFrame.new(c.x, c.y, c.z) * CFrame.Angles(c.rx, c.ry, c.rz)
-            end)
-        end
-        self._logger:info("Travel", "Leaving the house through its door")
-        local ok, reason = self._interaction:send("DoorEnter", GameConstants.HouseExitDestination, "MainDoor", {
-            skip_set_player_collisions = true,
-            skip_send_passive_door_request = true,
-            house_owner = me,
-            camera_rootpart_cframe_offset = offset,
-            exiting_door = door,
-        })
-        if not ok then
-            return false, "door enter failed: " .. tostring(reason)
-        end
-        self._interaction:send("MarkEnteredDoorTime")
-        self._interaction:send("PushFurnitureChanges", {})
-        self._interaction:send("ExitFurnitureUseStates")
-        self._interaction:send("UnsubscribeFromHouse", me)
-        local deadline = Util.now() + ARRIVAL_TIMEOUT_SECONDS
-        while Util.now() < deadline do
-            local now = self._state:get("player.interior")
-            if now ~= nil and now ~= GameConstants.HouseInteriorName then
-                self._logger:info("Travel", "Out of the house: " .. tostring(now))
-                return true
-            end
-            task.wait(0.25)
-        end
-        return false, "still in " .. tostring(self._state:get("player.interior")) .. " after the house door"
-    end
-    local function rootPosition()
-        local character = Players.LocalPlayer.Character
-        local root = character and character:FindFirstChild("HumanoidRootPart")
-        return root and root.Position
-    end
-    function Travel:_waitPlacedOnMainMap(seconds)
-        local deadline = Util.now() + seconds
-        while Util.now() < deadline do
-            local p = rootPosition()
-            if p and self:isAt("MainMap") and GameConstants.isOnMainMapArea(p) then
-                return true
-            end
-            task.wait(0.25)
-        end
-        return false
-    end
-    function Travel:_checkPlacedOnMainMap(recipe, me)
-        if self:_waitPlacedOnMainMap(8) then
-            return true
-        end
-        local p = rootPosition() or Vector3.zero -- v2.1.5: the character can be gone here (report: "index nil with 'X'")
-        self._logger:warn("Travel", string.format("Data says MainMap but my character is still at (%.0f, %.0f) (an interior's"
-            .. " area): asking for MainMap once more", p.X, p.Z))
-        self._interaction:send("SetLocation", "MainMap", nil, recipe.spawn)
-        if self:_waitPlacedOnMainMap(8) then
-            self._logger:info("Travel", "Placed on MainMap after asking again")
-            return true
-        end
-        p = rootPosition()
-        if not p then
-            return false, "character unavailable after travel"
-        end
-        return false, string.format("not placed on MainMap (character at %.0f, %.0f)", p.X, p.Z)
-    end
-    local INTERIORS_PATH = { "ClientModules", "Core", "InteriorsM", "InteriorsM" }
-    function Travel:_interiorsModule()
-        if self._interiorsM then return self._interiorsM end
-        if Util.now() < (self._moduleRetryAt or 0) then return nil end
-        self._moduleRetryAt = Util.now() + 15
-        local node = game:GetService("ReplicatedStorage")
-        for _, name in ipairs(INTERIORS_PATH) do
-            node = node and node:FindFirstChild(name)
-        end
-        local ok, module = false, nil
-        if node then
-            ok, module = pcall(require, node)
-        end
-        if ok and type(module) == "table" and type(module.enter) == "function" then
-            self._interiorsM = module
-            self._logger:info("Travel", "Using the game's own travel (InteriorsM.enter)")
-            return module
-        end
-        self._interiorsM = false
-        self._logger:warn("Travel", "The game's travel module was not found: using the remote route")
-        return nil
-    end
-    local function gameDoorId(recipe)
-        return (string.gsub(recipe.door, "!", "/"))
+        return Safety.placeName(place) == destination
     end
     function Travel:_waitArrival(destination, seconds)
-        local deadline = Util.now() + seconds
-        while Util.now() < deadline do
-            local character = Players.LocalPlayer.Character
-            local root = character and character:FindFirstChild("HumanoidRootPart")
-            if self:isAt(destination) and root and root.Parent and not root.Anchored then return true end
-            task.wait(0.25)
+        local generation = self._generation
+        local deadline, stableSince = Util.now() + seconds, nil
+        while generation == self._generation and Util.now() < deadline do
+            local enterDone = not self._enterThread or coroutine.status(self._enterThread) == "dead"
+            if enterDone and self._safety:ready(destination) then
+                stableSince = stableSince or Util.now()
+                if Util.now() - stableSince >= 0.75 then return true end
+            else stableSince = nil end
+            task.wait(0.1)
         end
         return false
     end
+    function Travel:_waitPlacedOnMainMap(seconds)
+        return self:_waitArrival("MainMap", seconds)
+    end
     function Travel:cancelPending()
+        self._generation += 1
         if self._enterThread then pcall(task.cancel, self._enterThread); self._enterThread = nil end
-        self._viaMainMap = nil
+        if self._moduleThread then pcall(task.cancel, self._moduleThread); self._moduleThread = nil end
+        self._safety:cancel()
+        self._busy = nil
     end
-    function Travel:_gameTravel(destination, recipe)
-        local me = Players.LocalPlayer
-        local before = self._state:get("player.interior")
-        if recipe.ownHouse and self._farmConfig.HomeByRespawn ~= false and Util.now() >= (self._respawnSkipUntil or 0) then
-            self._logger:info("Travel", "Going home by respawn (now in " .. tostring(before) .. ")")
-            local sent = self._interaction:send("Respawn")
-            if sent and self:_waitArrival(destination, ARRIVAL_TIMEOUT_SECONDS + 5) then
-                self._logger:info("Travel", "Arrived: " .. tostring(self._state:get("player.interior")) .. " (respawn)")
-                self._respawnFails = 0
-                return true
-            end
-            -- v2.1.5 (report 2026-10-12: every trip home waited ~17 s for a respawn that never came): 2 misses in a
-            -- row -> no respawn trips for 15 min
-            self._respawnFails = (self._respawnFails or 0) + 1
-            if self._respawnFails >= 2 then
-                self._respawnSkipUntil, self._respawnFails = Util.now() + 900, 0
-                self._logger:info("Travel", "Respawn missed twice in a row: going home by door for 15 min")
-            end
-            self._logger:info("Travel", "Respawn did not bring me home: using the game's door instead")
-            if self:isAt(destination) and self:_waitArrival(destination, 2) then
-                return true
-            end
+    function Travel:_interiorsModule()
+        if self._interiorsM then return self._interiorsM end
+        local node = game:GetService("ReplicatedStorage")
+        for _, name in ipairs({ "ClientModules", "Core", "InteriorsM", "InteriorsM" }) do
+            node = node and node:FindFirstChild(name)
         end
-        local module = self:_interiorsModule()
-        if not module then
-            return false, "no InteriorsM"
-        end
-        local options = {}
-        if recipe.ownHouse then
-            options.house_owner = me
-        end
-        local doorId = gameDoorId(recipe)
-        self._logger:info("Travel", "Going to " .. destination .. " (now in " .. tostring(before) .. ", game travel via "
-            .. doorId .. ")")
-        self:cancelPending()
-        self._enterThread = task.spawn(function()
-            local ok, err = pcall(module.enter, destination, doorId, options)
-            if not ok then
-                self._logger:warn("Travel", "InteriorsM.enter failed: " .. tostring(err))
-            end
+        if not node then return nil end
+        local done, result = false, nil
+        local moduleThread = task.spawn(function()
+            local ok, value = pcall(require, node)
+            if ok and type(value) == "table" and type(value.enter) == "function" then result = value end
+            done = true
         end)
-        if not self:_waitArrival(destination, ARRIVAL_TIMEOUT_SECONDS + 5) then
-            self:cancelPending()
-            return false, "still in " .. tostring(self._state:get("player.interior"))
-        end
-        self._logger:info("Travel", "Arrived: " .. tostring(self._state:get("player.interior")))
-        if destination == "MainMap" then
-            return self:_checkPlacedOnMainMap(recipe, me)
-        end
-        return true
+        self._moduleThread = moduleThread
+        local generation, deadline = self._generation, Util.now() + 4
+        while not done and generation == self._generation and Util.now() < deadline do task.wait(0.1) end
+        if self._moduleThread == moduleThread then pcall(task.cancel, moduleThread); self._moduleThread = nil end
+        if generation ~= self._generation then return nil end
+        self._interiorsM = result
+        return result
     end
-    function Travel:visitHouse(player)
-        local module = self:_interiorsModule()
-        if not module then
-            return false, "no InteriorsM"
+    local function valueUnder(parent, key)
+        for _, child in ipairs(parent:GetDescendants()) do
+            if child.Name == key and child:IsA("StringValue") then return child.Value end
+            local value = child:GetAttribute(key)
+            if type(value) == "string" then return value end
         end
-        self._logger:info("Travel", "Visiting the house of " .. tostring(player.Name) .. " (quest)")
-        self:cancelPending()
-        self._enterThread = task.spawn(function()
-            local ok, err = pcall(module.enter, "housing", "MainDoor", { house_owner = player })
-            if not ok then
-                self._logger:warn("Travel", "InteriorsM.enter (house visit) failed: " .. tostring(err))
+        return parent:GetAttribute(key)
+    end
+    function Travel:_findDoor(destination)
+        local scene = self._safety:sceneRoot(Safety.placeName(self._state:get("player.interior")))
+        local doors = scene and scene:FindFirstChild("Doors")
+        if not doors then return nil end
+        local candidates = {}
+        for _, part in ipairs(doors:GetDescendants()) do
+            if part.Name == "TouchToEnter" and part:IsA("BasePart") then
+                local working = part.Parent
+                local place = valueUnder(working, "destination_id")
+                local doorId = valueUnder(working, "destination_door_id")
+                if place == destination and type(doorId) == "string" and doorId ~= "" then
+                    table.insert(candidates, { part = part, model = working.Parent, destination = place, doorId = doorId })
+                end
             end
+        end
+        table.sort(candidates, function(a, b)
+            if a.doorId == b.doorId then return a.part:GetFullName() < b.part:GetFullName() end
+            if a.doorId == "MainDoor" then return true end
+            if b.doorId == "MainDoor" then return false end
+            return a.doorId < b.doorId
         end)
-        if not self:_waitArrival("housing", ARRIVAL_TIMEOUT_SECONDS + 5) then
-            self:cancelPending()
-            return false, "house visit arrival unconfirmed"
-        end
-        return true
+        return candidates[1]
     end
-    function Travel:goTo(destination)
-        local recipe = GameConstants.Travel[destination]
-        if not recipe then
-            return false, "no known route to " .. tostring(destination)
-        end
-        if self:isAt(destination) and self:_waitArrival(destination, 2) then
-            self._logger:debug("Travel", "Already at " .. destination)
-            return true
-        end
-        if self._farmConfig and self._farmConfig.HouseDoorExit and not recipe.ownHouse and self:isAt(GameConstants.HouseInteriorName) then
-            local out, outReason = self:exitHouse()
-            if not out then
-                self._logger:warn("Travel", "House door exit did not work (" .. tostring(outReason) .. "): going directly")
-            elseif self:isAt(destination) then
-                return true
-            end
-        end
-        -- v2.1.5 (report 2026-10-12: "Game travel ... did not work" on EVERY trip, ~15 s of waiting each, then the
-        -- remote route worked in 1 s; users saw it as a slow / white screen): 2 misses in a row -> the remote route
-        -- first for 15 min, then the game's travel is tried again
-        if self._farmConfig and self._farmConfig.GameTravel ~= false and Util.now() >= (self._gameTravelSkipUntil or 0) then
-            local arrived, why = self:_gameTravel(destination, recipe)
-            if arrived then
-                self._gameTravelFails = 0
-                return true
-            end
-            if self:isAt(destination) and self:_waitArrival(destination, 2) then
-                return true
-            end
-            self._gameTravelFails = (self._gameTravelFails or 0) + 1
-            if self._gameTravelFails >= 2 then
-                self._gameTravelSkipUntil, self._gameTravelFails = Util.now() + 900, 0
-                self._logger:info("Travel", "Game travel missed twice in a row: the remote route first for 15 min")
-            end
-            self._logger:info("Travel", "Game travel to " .. destination .. " did not work (" .. tostring(why)
-                .. "): using the remote route")
-        end
-        if destination ~= "MainMap" and self:isAt("TheCrypt") then
-            local module = self:_interiorsModule()
-            if module then
-                self._logger:info("Travel", "Leaving the Crypt first (its door to the main map)")
-                self._enterThread = task.spawn(pcall, module.enter, "MainMap", "TheCrypt/MainDoor", {})
-                local deadline = Util.now() + 15
-                while Util.now() < deadline and not self:isAt("MainMap") do
-                    task.wait(0.25)
-                end
-                if self:isAt("MainMap") and self:_gameTravel(destination, recipe) then
-                    return true
-                end
-            end
-        end
-        local before = self._state:get("player.interior")
-        self._logger:info("Travel", "Going to " .. destination .. " (now in " .. tostring(before) .. ")")
-        local me = Players.LocalPlayer
-        local doorOptions = { start_transparency = 1 }
-        if recipe.ownHouse then
-            doorOptions.house_owner = me
-        end
-        local ok, reason = self._interaction:send("DoorEnter", destination, recipe.door, doorOptions)
-        if not ok then
-            return false, "door enter failed: " .. tostring(reason)
-        end
-        if recipe.ownHouse then
-            self._interaction:send("SubscribeToHouse", me)
-        end
-        task.wait(DOOR_TO_LOCATION_DELAY)
-        ok, reason = self._interaction:send("SetLocation", destination, recipe.ownHouse and me or nil, recipe.spawn)
-        if not ok then
-            return false, "set location failed: " .. tostring(reason)
-        end
-        local started = Util.now()
-        local deadline = started + ARRIVAL_TIMEOUT_SECONDS
-        local resubscribed = false
-        while Util.now() < deadline do
-            local now = self._state:get("player.interior")
-            if self:isAt(destination) and self:_waitArrival(destination, 2) then
-                self._logger:info("Travel", "Arrived: " .. tostring(now))
-                if destination == "MainMap" then
-                    return self:_checkPlacedOnMainMap(recipe, me)
-                end
-                return true
-            end
-            if recipe.ownHouse and not resubscribed and Util.now() - started > 6 then
-                resubscribed = true
-                self._logger:info("Travel", "House data did not arrive: subscribing again")
-                self._interaction:send("UnsubscribeFromHouse", me)
-                self._interaction:send("SubscribeToHouse", me)
+    function Travel:_waitDoor(destination)
+        local deadline, generation = Util.now() + 8, self._generation
+        local current = Safety.placeName(self._state:get("player.interior"))
+        local hints = GameConstants.TravelStreamHints and GameConstants.TravelStreamHints[current]
+        local asked = false
+        repeat
+            local door = self:_findDoor(destination)
+            if door then return door end
+            if generation ~= self._generation then return nil end
+            if not asked and hints and hints[destination] then
+                asked = true
+                self._safety:requestStream(hints[destination], 7)
             end
             task.wait(0.25)
+        until Util.now() >= deadline
+        return nil
+    end
+    function Travel:_enter(destination, doorId, options, generation)
+        if self._farmConfig.GameTravel == false then return false, "game travel disabled; door touch did not confirm arrival" end
+        local module = self:_interiorsModule()
+        if generation ~= self._generation then return false, "travel cancelled" end
+        if not module then return false, "InteriorsM unavailable; no direct SetLocation fallback" end
+        local enterError
+        local enterThread = task.spawn(function()
+            local ok, result = pcall(module.enter, destination, doorId, options or {})
+            if not ok or result == false then enterError = tostring(result) end
+        end)
+        self._enterThread = enterThread
+        local arrived = self:_waitArrival(destination == "exit_housing" and "Neighborhood" or destination, ARRIVAL_TIMEOUT)
+        if self._enterThread == enterThread then pcall(task.cancel, enterThread); self._enterThread = nil end
+        if not arrived then return false, enterError or "door arrival / solid floor unconfirmed" end
+        return true
+    end
+    function Travel:_crossDoor(door, destination, options)
+        local generation = self._generation
+        if not door or not door.part or not door.part.Parent then return false, "live entrance not found: " .. destination end
+        local from = Safety.placeName(self._state:get("player.interior"))
+        if not self._safety:ready(from) then return false, "current scene has no confirmed floor" end
+        local character = Players.LocalPlayer.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if not root or not humanoid then return false, "character unavailable" end
+        local direction = door.part.CFrame.LookVector * Vector3.new(1, 0, 1)
+        direction = direction.Magnitude > 0.1 and direction.Unit or Vector3.new(0, 0, 1)
+        if (root.Position - door.part.Position):Dot(direction) < 0 then direction = direction * -1 end
+        local goal = door.part.Position + direction * 6 + Vector3.new(0, 2, 0)
+        self._logger:info("Travel", "Approaching " .. from .. " door -> " .. destination .. " (" .. door.doorId .. ")")
+        local moved, reason = self._safety:move(goal, from, 12)
+        if generation ~= self._generation then return false, "travel cancelled" end
+        -- Some triggers extend beyond the visible door and can fire during the approach.
+        if not self:isAt(from) then
+            self._safety:begin(ARRIVAL_TIMEOUT + 3)
+            return self:_waitArrival(destination, ARRIVAL_TIMEOUT), "door transition floor unconfirmed"
         end
-        -- v2.1.6 (reports: "travel to the Crypt failed: still in housing after 12 s", 70 times in an hour): some
-        -- places only open from the main map: once via the main map, then the same trip again
-        if destination ~= "MainMap" and not recipe.ownHouse and not self._viaMainMap and not self:isAt("MainMap")
-            and GameConstants.Travel.MainMap then
-            self._viaMainMap = true
-            self._logger:info("Travel", "Not placed in " .. destination .. " from " .. tostring(before)
-                .. ": going via the main map")
-            local okMain, arrivedNow = pcall(function()
-                return self:goTo("MainMap") and self:goTo(destination)
-            end)
-            self._viaMainMap = nil
-            if okMain and arrivedNow then
-                return true
+        if not moved then return false, "door approach: " .. tostring(reason) end
+        local support, supportWhy = self._safety:begin(ARRIVAL_TIMEOUT + 8)
+        if not support then return false, supportWhy end
+        humanoid:MoveTo(door.part.Position)
+        local touchUntil = Util.now() + 2
+        while generation == self._generation and Util.now() < touchUntil and self:isAt(from) do task.wait(0.1) end
+        if generation ~= self._generation then return false, "travel cancelled" end
+        if not self:isAt(from) or root.Anchored or not self._safety:ready(from) then
+            -- Never send a second request while the normal door is already transitioning.
+            return self:_waitArrival(destination, ARRIVAL_TIMEOUT), "door transition did not settle on solid ground"
+        end
+        if Players.LocalPlayer.Character ~= character then return false, "character changed at the door" end
+        if (root.Position - door.part.Position).Magnitude > 18 then return false, "did not reach the entrance" end
+        return self:_enter(door.destination, door.doorId, options, generation)
+    end
+    function Travel:_houseDoor()
+        local me = Players.LocalPlayer
+        local interiors = workspace:FindFirstChild("HouseInteriors")
+        local blueprint = interiors and interiors:FindFirstChild("blueprint")
+        local character = me.Character
+        local root = character and character:FindFirstChild("HumanoidRootPart")
+        local best, distance
+        -- House interiors are dynamic; choose the nearest loaded main door, including a visited house.
+        for _, house in ipairs(blueprint and blueprint:GetChildren() or {}) do
+            local doors = house:FindFirstChild("Doors")
+            local model = doors and doors:FindFirstChild("MainDoor")
+            for _, part in ipairs(model and model:GetDescendants() or {}) do
+                if root and part.Name == "TouchToEnter" and part:IsA("BasePart") then
+                    local d = (root.Position - part.Position).Magnitude
+                    if not distance or d < distance then
+                        local owner = house.Name == me.Name and me or Players:FindFirstChild(house.Name)
+                        best, distance = { part = part, model = model, destination = "exit_housing", doorId = "MainDoor",
+                            owner = owner, ownerName = house.Name }, d
+                    end
+                end
             end
         end
-        return false, "still in " .. tostring(self._state:get("player.interior")) .. " after " .. ARRIVAL_TIMEOUT_SECONDS .. " s"
+        return best
+    end
+    function Travel:_exitHouse()
+        if not self:isAt("housing") then return false, "not inside a house" end
+        local best = self:_houseDoor()
+        if not best then return false, "house MainDoor/TouchToEnter is not loaded" end
+        return self:_crossDoor(best, "Neighborhood", { house_owner = best.owner, exiting_door = best.model })
+    end
+    function Travel:_toMainMap()
+        if self:isAt("housing") then
+            local ok, why = self:_exitHouse()
+            if not ok then return false, why end
+        end
+        if self:isAt("MainMap") then return self:_waitArrival("MainMap", 8), "main city floor not ready" end
+        local door = self:_waitDoor("MainMap")
+        return self:_crossDoor(door, "MainMap")
+    end
+    function Travel:_toNeighborhood()
+        if self:isAt("housing") then return self:_exitHouse() end
+        if self:isAt("Neighborhood") then return self:_waitArrival("Neighborhood", 8), "neighborhood floor not ready" end
+        local ok, why = self:_toMainMap()
+        if not ok then return false, why end
+        return self:_crossDoor(self:_waitDoor("Neighborhood"), "Neighborhood")
+    end
+    function Travel:_home(owner)
+        local ok, reason = self:_toNeighborhood()
+        if not ok then return false, reason end
+        local generation = self._generation
+        local support, why = self._safety:begin(ARRIVAL_TIMEOUT + 8)
+        if not support then return false, why end
+        -- Existing game house-entry API: preserves the current character and equipped pets.
+        -- The supplied neighborhood save has no dynamic house exteriors; never invent plot coordinates.
+        self._logger:info("Travel", "Entering " .. owner.Name .. "'s house from Neighborhood (no respawn)")
+        return self:_enter("housing", "MainDoor", { house_owner = owner }, generation)
+    end
+    function Travel:_route(destination, owner)
+        if not self:canGoTo(destination) then return false, "no known route to " .. tostring(destination) end
+        if self:isAt(destination) and not owner then
+            local house = destination == "housing" and self:_houseDoor()
+            if destination ~= "housing" or house and house.ownerName == Players.LocalPlayer.Name then
+                return self:_waitArrival(destination, 8), "current destination floor not ready"
+            end
+        end
+        if destination == "housing" then return self:_home(owner or Players.LocalPlayer) end
+        if destination == "Neighborhood" then return self:_toNeighborhood() end
+        local ok, reason = self:_toMainMap()
+        if not ok or destination == "MainMap" then return ok, reason end
+        return self:_crossDoor(self:_waitDoor(destination), destination)
+    end
+    function Travel:_run(destination, owner)
+        if self._busy then return false, "another trip is already running" end
+        self._busy = true
+        local generation = self._generation
+        local ok, result, reason = pcall(self._route, self, destination, owner)
+        if generation == self._generation then
+            self._safety:cancel()
+            if self._enterThread then pcall(task.cancel, self._enterThread); self._enterThread = nil end
+            self._busy = nil
+        end
+        if not ok then return false, tostring(result) end
+        return result, reason
+    end
+    function Travel:goTo(destination) return self:_run(destination) end
+    function Travel:exitToMainMap() return self:_run("MainMap") end
+    function Travel:exitHouse() return self:_run("Neighborhood") end
+    function Travel:visitHouse(player)
+        if not player or not player.Parent then return false, "house owner unavailable" end
+        return self:_run("housing", player)
     end
     return Travel
 end
@@ -6222,6 +6260,7 @@ __moduleSources["Game/Tasks"] = function(...)
                     task.wait(1)
                     local moved, moveReason = ctx.interaction:teleportTo(spotName)
                     ctx.logger:info("Tasks", "Teleport to " .. spotName .. ": " .. (moved and "ok" or tostring(moveReason)))
+                    if not moved then return false, "destination movement: " .. tostring(moveReason) end
                     if moved then
                         door = nil
                         if group.petEntry and ctx.waitUntil(function()
@@ -6240,7 +6279,8 @@ __moduleSources["Game/Tasks"] = function(...)
                     end
                 end
                 if door then
-                    local inOk = ctx.travel:goTo(door.place)
+                    local inOk, inReason = ctx.travel:goTo(door.place)
+                    if not inOk then return false, "door route: " .. tostring(inReason) end
                     if inOk then
                         task.wait(1)
                         local outOk, outReason = ctx.travel:exitToMainMap()
@@ -7297,16 +7337,9 @@ __moduleSources["Game/Tasks"] = function(...)
         handles = function()
             return false
         end,
-        timeoutSeconds = 40,
+        timeoutSeconds = 150,
         run = function(ctx)
-            ctx.logger:info("Tasks", "Recover: respawning")
-            ctx.interaction:send("Respawn")
-            if ctx.waitUntil(function()
-                return ctx.travel:isAt(GameConstants.HouseInteriorName)
-            end, 20) then
-                return true
-            end
-            ctx.logger:info("Tasks", "Recover: respawn did not bring me home, travelling")
+            ctx.logger:info("Tasks", "Recover: returning through normal house entry without resetting pets")
             local ok, reason = ctx.travel:goTo(GameConstants.HouseInteriorName)
             if not ok then
                 return false, "recover: " .. tostring(reason)
@@ -7556,6 +7589,8 @@ __moduleSources["Game/Minigame"] = function(...)
         return self
     end
     function Minigame:reset()
+        self._sessionId = nil
+        self._sessionSeenAt = nil
         self.joinAcceptedAt = nil
         self.join = nil
         self.enter = nil
@@ -7618,18 +7653,30 @@ __moduleSources["Game/Minigame"] = function(...)
                 self._logger:info("Minigame", "New message type: " .. message .. " " .. Util.truncate(short(a) .. " " .. short(b), 300))
             end
         end
+        local qualified = type(gameKey) == "string" and string.find(gameKey, "::", 1, true) ~= nil
+        if message ~= "join_minigame" and message ~= "join_accepted" and qualified
+            and self._sessionId and self._sessionId ~= gameKey then return end
         local now = Util.now()
+        if qualified and not self._sessionId and KNOWN[message] and message ~= "leave_game" then
+            self._sessionId, self._sessionSeenAt = gameKey, now
+        end
         if message == "join_accepted" then
+            if self.leave then self:reset() end
             self.joinAcceptedAt = now
         elseif message == "join_minigame" and type(b) == "string" then
+            if self._sessionId ~= b then self:reset() end
+            self._sessionId = b
             self.join = { interior = a, gameId = b, at = now }
             self._logger:info("Minigame", "Round starting: " .. tostring(b))
         elseif message == "enter_game" and type(a) == "table" then
+            if qualified then self._sessionId = gameKey end
             self.enter = { intermissionEnd = tonumber(a.intermission_end_time), endTime = tonumber(a.end_time), at = now }
-        elseif message == "ghost_clusters_cast_wave" and type(a) == "table" then
-            for _, prop in pairs(a) do
-                if type(prop) == "table" and prop.haunted == true and prop.resolved ~= true and type(prop.unique) == "string" then
-                    self.haunted[prop.unique] = true
+        elseif (message == "ghost_clusters_cast_wave" or message == "ghost_clusters_props") and type(a) == "table" then
+            if message == "ghost_clusters_props" then self.haunted = {} end
+            for key, prop in pairs(a) do
+                local unique = type(prop) == "table" and (prop.unique or type(key) == "string" and key)
+                if type(prop) == "table" and prop.haunted == true and prop.resolved ~= true and type(unique) == "string" then
+                    self.haunted[unique] = true
                 end
             end
         elseif message == "ghost_clusters_boss_breakout" then
@@ -7660,6 +7707,16 @@ __moduleSources["Game/Minigame"] = function(...)
                 self.scoreCount, candy))
             self._logger:info("Minigame", "Round result: " .. Util.truncate(short(a) .. " | " .. short(b), 400))
         end
+    end
+    function Minigame:activeSession()
+        if self.leave then return nil end
+        local id = self.join and self.join.gameId or self._sessionId
+        if type(id) ~= "string" or string.sub(id, 1, #GameConstants.Event.MinigameId + 2) ~= GameConstants.Event.MinigameId .. "::" then return nil end
+        local untilTime = self.enter and self.enter.endTime
+        if untilTime and (untilTime ~= untilTime or untilTime == math.huge or Minigame.serverNow() > untilTime + 20) then return nil end
+        local at = self.join and self.join.at or self.enter and self.enter.at or self._sessionSeenAt
+        if not at or Util.now() - at > 300 then return nil end
+        return id
     end
     function Minigame:start(maid)
         local folder = ReplicatedStorage:FindFirstChild(GameConstants.Remotes.Folder)
@@ -10490,198 +10547,156 @@ __moduleSources["Game/EventTasks"] = function(...)
             return ok, why
         end
     end
+    -- The saved character contains a real Tool named GhostVacuumTool and its dynamic StringValue "unique".
+    -- Never hardcode the exporting player's unique ID or infer a token from the tool's color.
+    function EventTasks.vacuumItem(ctx)
+        local character = game:GetService("Players").LocalPlayer.Character
+        local tool = character and character:FindFirstChild("GhostVacuumTool")
+        local unique = tool and tool:IsA("Tool") and tool:FindFirstChild("unique")
+        if unique and unique:IsA("StringValue") and unique.Value ~= "" then return unique.Value, true end
+        local items = ctx.gameData:itemsOfId(TOYS, E.Vacuum)
+        return items[1], false
+    end
+    function EventTasks.startVacuum(ctx, vacuum)
+        local sent, returned = ctx.interaction:send("UseTool", vacuum, "START")
+        if not sent then return false, tostring(returned) end
+        -- The supplied older implementation generated use_token locally. A nil/boolean reply is not rejection.
+        -- Preserve an explicit returned token when present; otherwise retain that established client sequence.
+        local token = type(returned) == "string" and returned ~= "" and returned or EventTasks.newToken()
+        return true, token
+    end
     EventTasks.ghostGallery = {
         id = "ghost_gallery",
-        timeoutSeconds = 330,
+        timeoutSeconds = 420,
         run = function(ctx, group)
             local mg = ctx.minigame
-            if not mg or not mg.available then
-                return false, "minigame messages are not available"
-            end
-            local start = group and group.start
-            if not start then
-                return false, "round time unknown"
-            end
+            if not mg or not mg.available then return false, "minigame messages unavailable" end
+            local function inRound() return ctx.travel:isAt(E.MinigameInteriorPrefix) end
             local candyBefore = tonumber(ctx.gameData:get(KEYS.Candy))
             local keysBefore = #ctx.gameData:itemsOfId(TOYS, E.RustyKey)
-            local arrived, why = ctx.travel:goTo("HauntedManor")
-            if not arrived then
-                return false, "travel to the Manor failed: " .. tostring(why)
-            end
-            mg:reset()
-            local byZone = not (ctx.farmConfig.Event and ctx.farmConfig.Event.GhostJoinByZone == false)
-            local inZone = false
-            if byZone then
-                local zoneWhy
-                inZone, zoneWhy = ctx.interaction:teleportToJoinZone()
-                ctx.logger:info("Event", "Ghost Gallery: standing in the join circle" .. (inZone and "" or (" failed (" .. tostring(zoneWhy) .. ")")))
-            end
-            ctx.waitUntil(function()
-                return Minigame.serverNow() >= start - 3
-            end, math.max(0, start - Minigame.serverNow()) + 5)
-            if byZone then
-                inZone = ctx.interaction:teleportToJoinZone()
-            end
-            ctx.logger:info("Event", "Ghost Gallery: joining the round" .. (inZone and " (join circle)" or ""))
-            if inZone then
-                ctx.waitUntil(function()
-                    return mg.joinAcceptedAt ~= nil or mg.join ~= nil
-                end, 20)
-                if mg.joinAcceptedAt or mg.join then
-                    ctx.logger:info("Event", "Ghost Gallery: the game queued me from the join circle")
-                else
-                    ctx.logger:info("Event", "Ghost Gallery: the circle did not queue me in 20 s: joining by call")
-                end
-            end
-            local joinUntil = Util.now() + 30
-            while not mg.joinAcceptedAt and not mg.join and Util.now() < joinUntil do
-                ctx.interaction:send("MinigameJoin", E.MinigameId, true, nil)
-                ctx.waitUntil(function()
-                    return mg.joinAcceptedAt ~= nil or mg.join ~= nil
-                end, 3)
-            end
-            if not mg.joinAcceptedAt and not mg.join then
-                return false, "join was not accepted"
-            end
-            if not ctx.waitUntil(function()
-                return mg.join ~= nil
-            end, 40) then
-                return false, "accepted, but the round did not take me in"
-            end
-            local gameId = mg.join.gameId
-            local function inRound()
-                return ctx.travel:isAt(E.MinigameInteriorPrefix)
-            end
-            if not ctx.waitUntil(inRound, 15) then
-                ctx.interaction:send("MinigameJoin", gameId, true, nil)
-            end
-            if not ctx.waitUntil(inRound, 20) then
-                ctx.logger:warn("Event", "Ghost Gallery: not in the round after 35 s: leaving it (" .. tostring(gameId) .. ")")
-                if type(gameId) == "string" then
-                    ctx.interaction:send("MinigameLeave", gameId, false)
-                end
-                return false, "did not arrive in the minigame (left the round)"
-            end
-            local endTime = Minigame.serverNow() + 170
-            local function finish(ok, reason)
-                ctx.waitUntil(function()
-                    return mg.leave ~= nil or not inRound()
-                end, math.max(0, endTime - Minigame.serverNow()) + 25)
-                ctx.waitUntil(function()
-                    return not inRound()
-                end, 15)
-                local home, homeWhy = ctx.travel:goTo(GameConstants.HouseInteriorName)
-                if not home then
-                    ctx.logger:info("Event", "Ghost Gallery: going home after the round did not work (" .. tostring(homeWhy) .. ")")
-                end
-                return ok, reason
-            end
-            local vacuum
-            ctx.waitUntil(function()
-                vacuum = ctx.gameData:itemsOfId(TOYS, E.Vacuum)[1]
-                return vacuum ~= nil
-            end, 10)
-            if not vacuum then
-                return finish(false, "no vacuum in the backpack")
-            end
-            ctx.maid:Give(function()
-                ctx.interaction:send("UseTool", vacuum, "END", nil)
-                ctx.interaction:send("UnequipItem", vacuum, nil)
-            end)
-            ctx.interaction:send("EquipItem", vacuum, {})
-            ctx.waitUntil(function()
-                return mg.enter ~= nil
-            end, 10)
-            endTime = (mg.enter and mg.enter.endTime) or endTime
-            if mg.enter and mg.enter.intermissionEnd then
-                ctx.waitUntil(function()
-                    return Minigame.serverNow() >= mg.enter.intermissionEnd
-                end, 40)
-            end
-            local folder = workspace:FindFirstChild(E.GhostsFolder)
-            local uses, ghostUses, propUses, idle = 0, 0, 0, 0
-            local held = { target = nil }
-            local stopKeeper, keeperStats, holdNow = ctx.interaction:keepNear(function()
-                local target = held.target
-                if mg.leave or not inRound() then
-                    return false
-                end
-                if not target then
-                    return nil
-                end
-                if target.kind == "ghost" then
-                    if not target.model or target.model.Parent == nil then
-                        return nil
+            local session = mg:activeSession()
+            if not session and not inRound() then
+                local start = group and group.start
+                if not start then return false, "round time unknown" end
+                mg:reset() -- Before travelling: never erase a join that arrives during the trip.
+                local arrived, why = ctx.travel:goTo("HauntedManor")
+                if not arrived then return false, "travel to Manor: " .. tostring(why) end
+                if not mg:activeSession() then
+                    if ctx.farmConfig.Event.GhostJoinByZone ~= false then ctx.interaction:teleportToJoinZone() end
+                    ctx.waitUntil(function() return mg.join or Minigame.serverNow() >= start - 3 end,
+                        math.min(65, math.max(0, start - Minigame.serverNow()) + 5))
+                    local joinUntil = Util.now() + 30
+                    while not mg.joinAcceptedAt and not mg.join and Util.now() < joinUntil do
+                        local sent, whyJoin = ctx.interaction:send("MinigameJoin", E.MinigameId, true, nil)
+                        if not sent then return false, "minigame join: " .. tostring(whyJoin) end
+                        ctx.waitUntil(function() return mg.joinAcceptedAt or mg.join end, 3)
                     end
-                    return modelPosition(target.model), "below"
+                end
+            end
+            if ctx.interaction.protectTransition then ctx.interaction:protectTransition(65) end
+            if not ctx.waitUntil(function() session = mg:activeSession(); return session ~= nil end, 35) then
+                return false, "no confirmed ghost session ID; waiting for the game's round message"
+            end
+            local gameId = session
+            if not ctx.waitUntil(inRound, 25) then return false, "round accepted, interior arrival unconfirmed" end
+            -- A round already joined manually is resumed here without returning to the lobby or resetting messages.
+            local vacuum, alreadyHeld
+            ctx.waitUntil(function() vacuum, alreadyHeld = EventTasks.vacuumItem(ctx); return vacuum ~= nil end, 12)
+            if not vacuum then return false, "loaned GhostVacuumTool / inventory vacuum not replicated" end
+            local active, keeperStop, held = nil, nil, { target = nil }
+            local cleaned = false
+            local function stopContribution()
+                if active then
+                    local pending = active; active = nil
+                    ctx.interaction:send("MinigameMessage", gameId, pending.stopMessage, pending.payload)
+                end
+                ctx.interaction:send("UseTool", vacuum, "END", nil)
+            end
+            local function cleanup()
+                if cleaned then return end
+                cleaned = true
+                held.target = nil
+                if keeperStop then keeperStop(false) end
+                stopContribution()
+                if not alreadyHeld then ctx.interaction:send("UnequipItem", vacuum, nil) end
+            end
+            ctx.maid:Give(cleanup)
+            if not alreadyHeld then
+                local equipped, why = ctx.interaction:send("EquipItem", vacuum, {})
+                if not equipped then cleanup(); return false, "vacuum equip: " .. tostring(why) end
+            end
+            ctx.waitUntil(function() return mg.enter ~= nil or mg.leave ~= nil end, 10)
+            local endTime = mg.enter and mg.enter.endTime or Minigame.serverNow() + 170
+            if type(endTime) ~= "number" or endTime ~= endTime or math.abs(endTime) == math.huge then
+                cleanup(); return false, "invalid round end time"
+            end
+            endTime = math.min(endTime, Minigame.serverNow() + 240)
+            if mg.enter and mg.enter.intermissionEnd then
+                ctx.waitUntil(function() return mg.leave or Minigame.serverNow() >= mg.enter.intermissionEnd end, 40)
+            end
+            local holdNow, stats
+            keeperStop, stats, holdNow = ctx.interaction:keepNear(function()
+                if mg.leave or not inRound() then return false end
+                local target = held.target
+                if not target then return nil end
+                if target.kind == "ghost" then
+                    if not target.model or not target.model.Parent then return nil end
+                    return modelPosition(target.model), 6
                 end
                 return target.position, E.PropStandOff
             end)
-            ctx.maid:Give(stopKeeper)
-            while not mg.leave and Minigame.serverNow() < endTime + 5 do
-                folder = folder or workspace:FindFirstChild(E.GhostsFolder)
-                local target = EventTasks.pickTarget(ctx, folder, mg)
-                if not target then
-                    idle += 1
-                    task.wait(0.5)
-                else
-                    held.target = target
-                    holdNow()
-                    local started, token = ctx.interaction:send("UseTool", vacuum, "START")
-                    if not started or type(token) ~= "string" or token == "" then
-                        return false, "vacuum did not return a valid use token"
+            local attempts, idleSince, lastWarning = 0, nil, -math.huge
+            while not mg.leave and inRound() and Minigame.serverNow() < endTime + 5 do
+                if mg:activeSession() ~= gameId then cleanup(); return false, "ghost session changed" end
+                local target = EventTasks.pickTarget(ctx, workspace:FindFirstChild(E.GhostsFolder), mg)
+                held.target = target
+                if not target or holdNow() == false then
+                    idleSince = idleSince or Util.now()
+                    if Util.now() - idleSince > 10 and Util.now() - lastWarning > 15 then
+                        lastWarning = Util.now()
+                        ctx.logger:warn("Ghost", target and "Target found, but its floor is not ready" or "Waiting for streamed ghosts / haunted props")
                     end
-                    uses += 1
+                    task.wait(0.4)
+                else
+                    idleSince = nil
+                    local started, token = EventTasks.startVacuum(ctx, vacuum)
+                    if not started then cleanup(); return false, "vacuum start: " .. tostring(token) end
                     local isGhost = target.kind == "ghost"
                     local payload = isGhost and { use_token = token, ghost_id = target.id } or { use_token = token, unique = target.id }
                     local startMessage = isGhost and "start_contribute" or "start_prop_contribute"
-                    local stopMessage = isGhost and "stop_contribute" or "stop_prop_contribute"
+                    active = { payload = payload, stopMessage = isGhost and "stop_contribute" or "stop_prop_contribute" }
+                    attempts += 1
                     for send = 1, 8 do
-                        if mg.leave or (isGhost and target.model.Parent == nil) or (not isGhost and not mg.haunted[target.id]) then
-                            break
-                        end
-                        local nextTarget = target.boss and send > 1 and EventTasks.pickTarget(ctx, folder, mg)
-                        if nextTarget and not nextTarget.boss then
-                            break
-                        end
-                        ctx.interaction:send("MinigameMessage", gameId, startMessage, payload)
+                        if mg.leave or not inRound() or mg:activeSession() ~= gameId
+                            or (isGhost and not target.model.Parent) or (not isGhost and not mg.haunted[target.id]) then break end
+                        local nextTarget = target.boss and send > 1 and EventTasks.pickTarget(ctx, workspace:FindFirstChild(E.GhostsFolder), mg)
+                        if nextTarget and not nextTarget.boss then break end
+                        local contributed, why = ctx.interaction:send("MinigameMessage", gameId, startMessage, payload)
+                        if not contributed then cleanup(); return false, "vacuum contribution: " .. tostring(why) end
                         task.wait(0.3)
                     end
-                    ctx.interaction:send("MinigameMessage", gameId, stopMessage, payload)
-                    if isGhost then
-                        ghostUses += 1
-                    else
-                        propUses += 1
-                    end
+                    stopContribution()
                 end
             end
-            held.target = nil
-            stopKeeper(inRound() and not mg.leave)
-            ctx.logger:info("Event", string.format("Ghost Gallery: held %d studs under the ghosts (%d position corrections)",
-                E.HoldBelowStuds, keeperStats.corrections))
-            ctx.waitUntil(function()
-                return mg.leave ~= nil
-            end, 20)
+            cleanup()
+            ctx.waitUntil(function() return mg.leave ~= nil end, 12)
             local candyAfter = tonumber(ctx.gameData:get(KEYS.Candy))
-            local gained = (candyAfter and candyBefore) and (candyAfter - candyBefore) or nil
-            local myProps = 0
-            for _, progress in pairs(mg.propProgress) do
-                if progress > 0 then
-                    myProps += 1
-                end
-            end
-            ctx.logger:info("Event", string.format("Ghost Gallery: %d points (%d hits), props moved %d, vacuum uses %d (ghosts %d,"
-                .. " props %d), reward %s candy%s", mg.score, mg.scoreCount, myProps, uses, ghostUses, propUses,
-                tostring(mg.leave and mg.leave.candy or "?"), gained and string.format(", candy %+d", gained) or ""))
+            local gained = candyBefore and candyAfter and candyAfter - candyBefore or 0
+            local reward = mg.leave and tonumber(mg.leave.candy) or 0
             local keysAfter = #ctx.gameData:itemsOfId(TOYS, E.RustyKey)
-            ctx.logger:info("Event", string.format("Ghost Gallery: Rusty Key %s (score %d, boss %s)",
-                keysAfter > keysBefore and "EARNED (+1)" or "not earned", mg.score, mg.bossOut and "came out" or "did not come out"))
-            if mg.scoreCount == 0 and not (mg.leave and mg.leave.candy > 0) and not (gained and gained > 0) then
-                return finish(false, uses == 0 and "no ghost or haunted prop found" or "no points and no reward: vacuuming did not count")
+            ctx.logger:info("Ghost", string.format("Server score %d (%d score messages); attempts %d; candy %+d; keys %+d",
+                mg.score, mg.scoreCount, attempts, gained, keysAfter - keysBefore))
+            if not mg.leave then return false, "round end unconfirmed" end
+            if mg.scoreCount == 0 and reward <= 0 and gained <= 0 then return false, "no score or reward confirmed by the game" end
+            ctx.waitUntil(function() return not inRound() end, 15)
+            if not inRound() then
+                local home, why = ctx.travel:goTo(GameConstants.HouseInteriorName)
+                if not home then ctx.logger:warn("Ghost", "Round finished; normal return home pending: " .. tostring(why)) end
             end
-            return finish(true)
+            return true
         end,
     }
+
     EventTasks._journalAt = nil
     EventTasks.hauntlet = {
         id = "hauntlet",
@@ -12401,7 +12416,7 @@ __moduleSources["Game/TaskManager"] = function(...)
             if session then session:setPhase(entry, phase) end
         end
         local cleanupActions = { UnequipItem = true, UnfocusPet = true, ExitFurnitureUseStates = true,
-            ExitSeatStates = true, DropPetObject = true, UseTool = true, MinigameLeave = true, UnequipStroller = true }
+            ExitSeatStates = true, DropPetObject = true, UseTool = true, MinigameLeave = true, MinigameMessage = true, UnequipStroller = true }
         local interaction = self._interaction
         local proxy = {}
         context.interaction = setmetatable(proxy, { __index = function(_, name)
@@ -12413,6 +12428,10 @@ __moduleSources["Game/TaskManager"] = function(...)
                 if not active then
                     local allowed = running and running.cleaning and name == "send" and cleanupActions[actionName]
                     if actionName == "UseTool" then local _, _, phase = ...; allowed = allowed and phase == "END" end
+                    if actionName == "MinigameMessage" then
+                        local _, _, message = ...
+                        allowed = allowed and (message == "stop_contribute" or message == "stop_prop_contribute")
+                    end
                     if not allowed then return false, "task cancelled" end
                 end
                 if name == "send" and (actionName == "EquipItem" or actionName == "UnequipItem") and self._gameData:hasPet(unique) then
@@ -12428,7 +12447,7 @@ __moduleSources["Game/TaskManager"] = function(...)
             end
         end })
         runMaid:Give(function()
-            if self._travel then self._travel:cancelPending() end
+            if self._travel and not (running and running.side) then self._travel:cancelPending() end
         end)
         return context
     end
@@ -12523,6 +12542,7 @@ __moduleSources["Game/TaskManager"] = function(...)
             return
         end
         if running.eventJob then
+            if key == "ghost_gallery" then self._ghostResumeRetryAt = Util.now() + 5 end
             local wait = key == "pet_pen" and math.max(1, tonumber(self._farmConfig.Event.PetPenMinutes) or 15) * 60
                 or (key == "skelicorn" and EventTasks.skelicornShop(self._farmConfig) and 15)
                 or EVENT_RECHECK_SECONDS[key] or 60
@@ -12708,10 +12728,8 @@ __moduleSources["Game/TaskManager"] = function(...)
         self:_start("recover", "recover: stuck, go home", Tasks.recover, nil)
         return true
     end
-    -- v2.1.4 (users: "stuck on a white screen, 10 minutes after joining"): the checks below stop at "game not ready"
-    -- and "Play menu open", so a white screen (no character / no place) was never recovered. This watch runs first:
-    -- 90 s without a character or a place -> respawn (TeamAPI/Spawn, the game's own spawn), again at 180 s, then a
-    -- rejoin after Farm.StuckRejoinSeconds when Farm.AutoRejoin is on. Every step is logged with what was missing.
+    -- A travel failure does not authorize a character reset. Refresh data and report the missing state;
+    -- the separately configured AutoRejoin policy is retained for an actually disconnected/stalled client.
     function TaskManager:_whiteScreenCheck()
         if self._state:get("session.disconnectReason") ~= nil
             or self._running ~= nil then
@@ -12736,14 +12754,12 @@ __moduleSources["Game/TaskManager"] = function(...)
         local step = self._blankStep or 0
         if (step == 0 and blank > 90) or (step == 1 and blank > 180) then
             self._blankStep = step + 1
-            self._logger:warn("Tasks", string.format("White screen? %d s without a usable character / place (%s): respawning"
+            self._logger:warn("Tasks", string.format("Waiting %d s for a usable character / place (%s); no character reset"
                 .. " (try %d)", math.floor(blank), what, step + 1))
             if self._logger.saveProblemReport then -- No-op in this build; report remains in memory
                 self._logger:saveProblemReport()
             end
-            pcall(function()
-                self._interaction:send("Respawn")
-            end)
+            if self._gameData and self._gameData.refreshNeeds then self._gameData:refreshNeeds() end
             return false
         end
         local limit = math.max(120, tonumber(self._farmConfig.StuckRejoinSeconds) or 180)
@@ -12770,6 +12786,14 @@ __moduleSources["Game/TaskManager"] = function(...)
         end
         self:_expireDisabled()
         self:_trackPet()
+        if self:_ghostPending() and (not self._running or self._running.key ~= "ghost_gallery") then
+            self:_finish("INTERRUPTED", "already inside a Ghost Gallery round")
+            self:_finish("INTERRUPTED", "already inside a Ghost Gallery round", "_side")
+            if (self._cleanupCount or 0) == 0 then
+                self:_start("ghost_gallery", "Ghost Gallery: resume current round", EventTasks.ghostGallery, { resume = true }, true)
+            end
+            return
+        end
         if self._side and Util.now() > self._side.deadline then
             self:_finish("TIMEOUT", "no result within " .. math.floor(self._side.deadline - self._side.startedAt) .. " s", "_side")
         end
@@ -13133,6 +13157,13 @@ __moduleSources["Game/TaskManager"] = function(...)
             self:_start(best.kind, best.kind .. " (" .. table.concat(owners, " + ") .. ")", bestTask, best, false, true)
         end
     end
+    function TaskManager:_ghostPending()
+        local event, mg = self._farmConfig.Event, self._minigame
+        return type(event) == "table" and event.Enabled == true and event.GhostGallery == true
+            and mg and mg.available and mg:activeSession() ~= nil
+            and self._travel and self._travel:isAt(GameConstants.Event.MinigameInteriorPrefix)
+            and not self:_isBlocked("ghost_gallery") and Util.now() >= (self._ghostResumeRetryAt or 0)
+    end
     function TaskManager:_ghostRoundDue(lead)
         local event = self._farmConfig.Event
         local data = self._gameData
@@ -13201,6 +13232,7 @@ __moduleSources["Game/TaskManager"] = function(...)
         return stateName
     end
     function TaskManager:_selectEventJob()
+        if self:_ghostPending() then return "ghost_gallery", "Ghost Gallery: current round", EventTasks.ghostGallery, { resume = true } end
         local event = self._farmConfig.Event
         local data = self._gameData
         if not data then
